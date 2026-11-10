@@ -1,0 +1,9 @@
+# Aqui solo vive el cascaron de la herramienta. Se ignora todo salvo lo listado,
+# asi un JSON o un Excel que caiga en esta carpeta nunca llega al repositorio.
+*
+!.gitignore
+!.nojekyll
+!index.html
+!echarts.min.js
+!README.md
+!publicar.bat

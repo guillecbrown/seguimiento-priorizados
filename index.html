@@ -1,0 +1,2111 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seguimiento de priorizados</title>
+<meta name="robots" content="noindex">
+<script src="echarts.min.js"></script>
+<style>
+  :root {
+    --fondo: #f6f6f4;
+    --papel: #ffffff;
+    --tinta: #18181b;
+    --suave: #52525b;
+    --tenue: #8a8a93;
+    --linea: #e4e4e7;
+    --linea2: #d4d4d8;
+    --gris: #f4f4f5;
+    --alerta: #c2410c;
+    --ok: #1d6b35;
+    --f: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --fd: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 14px/1.45 var(--f); color: var(--tinta); background: var(--fondo); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  svg { display: block; width: 100%; height: auto; }
+  .oculto { display: none !important; }
+  /* reserva siempre el lugar de la barra de desplazamiento: al cambiar de pestana el ancho no se mueve */
+  html { scrollbar-gutter: stable; }
+
+  /* encabezado */
+  header { height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--papel); border-bottom: 1px solid var(--linea); position: sticky; top: 0; z-index: 6; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; }
+  .marca img { width: 24px; height: 24px; }
+  .buscar { position: relative; margin-left: 20px; }
+  .buscar input { width: 340px; height: 34px; border: 1px solid var(--linea); background: var(--gris); border-radius: 8px; padding: 0 64px 0 34px; outline: none; }
+  .buscar input:focus { background: var(--papel); border-color: var(--linea2); box-shadow: 0 0 0 3px rgba(24,24,27,.06); }
+  .buscar svg { position: absolute; left: 11px; top: 10px; width: 14px; height: 14px; }
+  .buscar kbd { position: absolute; right: 8px; top: 7px; font: 500 11px var(--f); color: var(--tenue); border: 1px solid var(--linea2); border-radius: 5px; padding: 1px 6px; background: var(--papel); }
+  .resultados { position: absolute; top: 40px; left: 0; width: 560px; background: var(--papel); border: 1px solid var(--linea); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.10); padding: 6px; display: none; z-index: 20; }
+  .resultados.on { display: block; }
+  .resultados button { display: flex; width: 100%; text-align: left; gap: 12px; align-items: baseline; border: 0; background: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .resultados button.sel { background: var(--gris); }
+  .resultados b { font-weight: 600; white-space: nowrap; }
+  .resultados span { color: var(--tenue); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .resultados .vacio { padding: 10px; }
+  .der { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .datos-al { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 999px; background: var(--gris); color: var(--suave); font-size: 12.5px; white-space: nowrap; cursor: default; }
+  .datos-al i { width: 7px; height: 7px; border-radius: 50%; background: var(--tenue); }
+  .datos-al.fresco i { background: #0ca30c; }
+  .datos-al.viejo i { background: #fab219; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--linea); background: var(--papel); cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .btn:hover { border-color: var(--linea2); background: #fafafa; }
+  .btn.prim { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+  .btn.prim:hover { background: #2f2f35; }
+  .btn.chico { height: 28px; padding: 0 10px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  /* pestanas y filtros */
+  .subbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; padding: 0 24px; background: var(--papel); border-bottom: 1px solid var(--linea); position: sticky; top: 56px; z-index: 5; }
+  nav { display: flex; gap: 2px; }
+  nav button { white-space: nowrap; border: 0; background: none; height: 44px; padding: 0 12px; cursor: pointer; color: var(--tenue); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  nav button:hover { color: var(--tinta); }
+  nav button.on { color: var(--tinta); border-bottom-color: var(--tinta); }
+  nav .cuenta { font-size: 11.5px; color: var(--tenue); margin-left: 5px; }
+  .seg { display: inline-flex; padding: 3px; background: var(--gris); border-radius: 8px; gap: 2px; }
+  .seg button { border: 0; background: none; height: 26px; padding: 0 10px; border-radius: 6px; cursor: pointer; color: var(--suave); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .seg button.on { background: var(--papel); color: var(--tinta); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04); }
+  #nuevas { display: flex; align-items: center; gap: 10px; padding: 9px 24px; background: #fffbeb; border-bottom: 1px solid #fde68a; font-size: 13px; }
+  #nuevas .lista { color: var(--suave); }
+
+  /* contenido */
+  main { padding: 20px 24px 40px; }
+  main > section { display: grid; gap: 16px; }
+  .hoja { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 16px 20px; min-width: 0; }
+  .hoja.plana { padding: 0; overflow: hidden; }
+  .hoja h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .barra { display: flex; align-items: center; gap: 10px; color: var(--suave); font-size: 13px; flex-wrap: wrap; }
+  .cabA { padding: 14px 20px 0; }
+  .expl { color: var(--tenue); font-size: 12.5px; margin: 6px 0 12px; max-width: 160ch; }
+  .info { color: var(--tenue); font-size: 12.5px; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--linea); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--suave); user-select: none; background: var(--papel); }
+  .chk input { accent-color: var(--tinta); margin: 0; }
+  input[type=search] { height: 32px; padding: 0 10px; border: 1px solid var(--linea); border-radius: 8px; width: 300px; background: var(--papel); outline: none; }
+  input[type=search]:focus { border-color: var(--linea2); box-shadow: 0 0 0 3px rgba(24,24,27,.06); }
+  .pill { display: inline-block; font: 600 11px var(--f); color: var(--suave); background: var(--gris); border: 1px solid var(--linea2); border-radius: 999px; padding: 0 6px; }
+  .punto { width: 7px; height: 7px; border-radius: 50%; background: #ea580c; display: inline-block; }
+  .ley { color: var(--tenue); font-size: 12.5px; display: inline-flex; gap: 14px; align-items: center; margin-left: 6px; }
+  .ley > span { display: inline-flex; gap: 6px; align-items: center; }
+
+  /* cifras clave */
+  .hoja.kpis { padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .kpi { padding: 16px 20px; }
+  .kpi + .kpi { border-left: 1px solid var(--linea); }
+  .kpi .l { color: var(--suave); font-size: 13px; font-weight: 500; }
+  .kpi .v { font: 600 32px/1.15 var(--fd); letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .v small { font: 500 14px var(--f); color: var(--tenue); letter-spacing: 0; margin-left: 6px; }
+  .kpi .s { margin-top: 6px; font-size: 12.5px; color: var(--tenue); display: flex; gap: 6px; align-items: center; }
+  .kpi .d { font-weight: 600; color: var(--suave); }
+  .kpi .d.bien { color: var(--ok); }
+  .kpi .d.mal { color: #b42318; }
+  .kpi .b { display: flex; gap: 2px; height: 4px; margin-top: 12px; border-radius: 2px; background: var(--gris); overflow: hidden; }
+  .kpi .b i { display: block; height: 100%; }
+
+  /* arbol */
+  #svgArbol, #svgArbol867 { padding: 8px 12px 16px; }
+  #aResultado, #aResultado867 { margin: 12px 20px 0; padding: 8px 12px; background: var(--gris); border-radius: 8px; font-size: 13.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #aResultado .camino, #aResultado867 .camino { font-weight: 600; }
+  #aResultado .nota { color: var(--tenue); }
+  .resumen p { margin: 10px 0 0; font-size: 14.5px; line-height: 1.65; max-width: 120ch; }
+  .resumen .nota { color: var(--tenue); font-size: 12.5px; margin-top: 10px; }
+
+  /* tablas */
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #f0f0f2; text-align: left; vertical-align: middle; white-space: nowrap; }
+  td.prog { white-space: normal; min-width: 220px; max-width: 380px; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--papel); color: var(--tenue); font-weight: 500; font-size: 12px; cursor: pointer; white-space: nowrap; user-select: none; border-bottom-color: var(--linea); }
+  th:hover { color: var(--tinta); }
+  th .flecha { font-size: 10px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.exp { white-space: nowrap; font-weight: 600; }
+  td.cort { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: #fafafa; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--linea); white-space: nowrap; color: var(--suave); background: var(--papel); }
+  .chip.nuevo { border-style: dashed; color: var(--tenue); }
+  .chip.si { color: var(--ok); border-color: #cfe5d6; background: #f3f8f4; }
+  .chip.no { color: var(--alerta); border-color: #f5d0bd; background: #fdf4ef; }
+  .chip.siged { color: #6e40c9; border-color: #e0d4f7; background: #f7f3fd; }
+  .tag { display: inline-block; font-size: 11.5px; color: var(--suave); background: var(--gris); border-radius: 6px; padding: 1px 6px; margin: 1px 4px 1px 0; }
+  .vencido { color: #b42318; font-weight: 600; }
+  .prog { color: var(--suave); }
+  .vacio { padding: 40px; text-align: center; color: var(--tenue); }
+  #lista-cuerpo { max-height: calc(100vh - 200px); overflow: auto; }
+  /* filtros de la pestana Expedientes: un boton por campo, cada uno con su menu de seleccion multiple */
+  .filtros { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .filtro { position: relative; }
+  .filtro > .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; }
+  .filtro > .btn.activo { border-color: var(--tinta); }
+  .filtro > .btn .n { font: 600 11px var(--f); background: var(--tinta); color: #fff; border-radius: 999px; padding: 0 6px; line-height: 17px; }
+  .filtro > .btn .fl { color: var(--tenue); font-size: 10px; }
+  .menu { position: absolute; top: 36px; left: 0; z-index: 15; width: 320px; background: var(--papel); border: 1px solid var(--linea); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.10); padding: 8px; }
+  .menu.ancho { width: 400px; }
+  .menu.a-izq { left: auto; right: 0; }
+  .menu input[type=search] { width: 100%; margin-bottom: 6px; }
+  .menu .acc { display: flex; gap: 6px; margin-bottom: 4px; }
+  .menu .opciones { max-height: 340px; overflow: auto; }
+  .menu h4 { margin: 8px 6px 4px; font-size: 11.5px; font-weight: 600; color: var(--tenue); }
+  .menu label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--tinta); }
+  .menu label:hover { background: var(--gris); }
+  .menu label span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu label small { color: var(--tenue); font-variant-numeric: tabular-nums; }
+  .menu label.cero { color: var(--tenue); }
+  .menu input[type=checkbox] { accent-color: var(--tinta); margin: 0; }
+  .menu .vacio { padding: 8px 6px; color: var(--tenue); font-size: 13px; }
+
+  /* panel lateral */
+  #velo { position: fixed; inset: 0; background: rgba(24,24,27,.18); z-index: 10; }
+  #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(1100px, 92vw); background: var(--papel); border-left: 1px solid var(--linea); box-shadow: -12px 0 32px rgba(0,0,0,.08); display: flex; flex-direction: column; z-index: 11; }
+  #panel .cab { padding: 16px 20px; border-bottom: 1px solid var(--linea); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  #panel h2 { font: 600 17px var(--fd); margin: 0; }
+  #panel .sub { color: var(--tenue); font-size: 12.5px; margin-top: 2px; }
+  #panel input[type=search] { width: 260px; }
+  #panel .cuerpo { overflow: auto; flex: 1; }
+
+  /* ficha de un expediente: panel lateral encima del de la caja */
+  #velo2 { position: fixed; inset: 0; background: rgba(24,24,27,.12); z-index: 12; }
+  #ficha { position: fixed; top: 0; right: 0; bottom: 0; width: min(660px, 94vw); overflow: auto; background: var(--papel); border-left: 1px solid var(--linea); box-shadow: -12px 0 32px rgba(0,0,0,.10); z-index: 13; }
+  #ficha .cab { border-top: 4px solid var(--et, var(--linea)); padding: 18px 22px 14px; border-bottom: 1px solid var(--linea); display: flex; gap: 12px; align-items: flex-start; position: sticky; top: 0; background: var(--papel); }
+  #ficha h2 { font: 600 20px var(--fd); margin: 0 0 2px; letter-spacing: -.01em; }
+  #ficha .sub { color: var(--tenue); font-size: 12.5px; }
+  #ficha .resF { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 22px 0; border: 1px solid var(--linea); border-radius: 10px; }
+  #ficha .resF > div { padding: 10px 14px; min-width: 0; }
+  #ficha .resF > div + div { border-left: 1px solid var(--linea); }
+  #ficha .resF > div:first-child { background: color-mix(in srgb, var(--et, #fff) 7%, #fff); border-radius: 10px 0 0 10px; }
+  #ficha .resF small { display: block; color: var(--tenue); font-size: 12px; margin-bottom: 2px; }
+  #ficha .resF b { font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  #ficha .ubic { margin: 12px 22px 0; padding: 10px 12px; background: var(--gris); border-radius: 8px; font-size: 13.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #ficha .ubic b { font-weight: 600; }
+  #ficha dl { display: grid; grid-template-columns: 170px 1fr; gap: 7px 14px; margin: 4px 22px 24px; font-size: 13.5px; }
+  #ficha dt { color: var(--tenue); }
+  #ficha dd { margin: 0; }
+  #ficha h3 { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--suave); margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #f0f0f2; }
+
+  /* pestana Riesgo */
+  .rfila { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 1100px) { .rfila { grid-template-columns: minmax(0, 1fr); } }
+  #matriz, #matriz867 { overflow-x: auto; }
+  table.matriz { width: 100%; font-size: 13px; }
+  table.matriz th, table.matriz td:first-child { white-space: nowrap; }
+  table.matriz th { cursor: default; text-align: center; padding: 6px 5px; font-size: 12px; position: static; }
+  table.matriz th:first-child, table.matriz td:first-child { text-align: left; }
+  table.matriz td { text-align: center; font-variant-numeric: tabular-nums; padding: 8px 5px; }
+  table.matriz td.c { cursor: pointer; }
+  table.matriz td.c:hover { outline: 2px solid var(--tinta); outline-offset: -2px; }
+  table.matriz td .nue { color: var(--tenue); font-size: 11.5px; margin-left: 3px; }
+  table.matriz tr.tot td { font-weight: 600; border-top: 1px solid var(--linea); }
+  table.matriz tbody tr { cursor: default; }
+  table.matriz tbody tr:hover td { background: none; }
+  .sem { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .sem i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dias { display: inline-block; min-width: 42px; padding: 1px 8px; border-radius: 6px; font-weight: 600; font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+  .dias.venc, .dias.rojo { background: #fdecec; color: #b42318; }
+  .dias.ambar { background: #fef4dc; color: #8a5300; }
+  .dias.verde { background: #e9f5ea; color: #1d6b35; }
+  .dias.sin { background: var(--gris); color: var(--tenue); }
+  .clave { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; font-size: 12.5px; color: var(--suave); }
+  .clave i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .clave i.lin { height: 2px; border-radius: 0; }
+  .clave i.punt { width: 22px; height: 0; border-radius: 0; border-top: 2px dashed; background: none !important; }
+  #alerta-cuerpo, #alerta-cuerpo867 { max-height: 520px; overflow: auto; }
+  .grafico { width: 100%; }
+
+  /* notas */
+  .notas { font-size: 13.5px; }
+  .notas h3 { font-size: 14px; font-weight: 600; margin: 22px 0 8px; }
+  .notas h3:first-child { margin-top: 2px; }
+  .notas li { margin-bottom: 6px; color: var(--suave); }
+  .notas li b { color: var(--tinta); font-weight: 600; }
+  .notas p { color: var(--suave); }
+  code { font-size: 12.5px; background: var(--gris); padding: 0 4px; border-radius: 4px; }
+
+  /* avisos y avance de la actualizacion */
+  #estado { position: fixed; right: 20px; bottom: 20px; background: var(--tinta); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 13px; min-width: 300px; z-index: 30; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  #estado .barra-avance { height: 4px; background: rgba(255,255,255,.25); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  #estado .barra-avance i { display: block; height: 100%; background: #fff; transition: width .2s; }
+
+  /* version online (navegador): pantalla sin datos y zona para soltar el JSON */
+  #vacio { max-width: 560px; margin: 56px auto; padding: 40px 32px; text-align: center; background: var(--papel); border: 1.5px dashed var(--linea2); border-radius: 14px; color: var(--suave); }
+  #vacio h2 { margin: 0 0 8px; font: 600 19px/1.3 var(--fd); color: var(--tinta); }
+  #vacio p { margin: 0 0 20px; }
+  #vacio code { padding: 1px 5px; border-radius: 5px; background: var(--gris); font-size: 13px; }
+  #vacio small { display: block; margin-top: 18px; color: var(--tenue); font-size: 12.5px; }
+  body.soltando::after { content: "Suelta el archivo para cargar los datos"; position: fixed; inset: 12px; z-index: 50; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.92); border: 2px dashed var(--tinta); border-radius: 16px; font: 600 18px var(--fd); pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="marca"><img src="icono.png" alt="" onerror="this.remove()">Seguimiento de priorizados</div>
+  <div class="buscar">
+    <svg viewBox="0 0 16 16" fill="none" stroke="#8a8a93" stroke-width="1.8"><circle cx="7" cy="7" r="5.2"/><path d="M11 11l3.5 3.5"/></svg>
+    <input id="q" placeholder="Buscar expediente, administrado o jefe" autocomplete="off" spellcheck="false">
+    <kbd>Ctrl K</kbd>
+    <div class="resultados" id="res"></div>
+  </div>
+  <div class="der">
+    <span class="datos-al" id="dato"><i></i><span id="meta">Cargando…</span></span>
+    <button class="btn" id="btnExportar" title="Exporta a Excel todos los expedientes (408, nuevos y al corte) y, en otra hoja, los 867 originales">Exportar todo</button>
+    <button class="btn" id="btnDrive" title="Sube los árboles de 408 y 867 y el listado de expedientes a la hoja de Google (config.json > drive_hoja)">Subir al Drive</button>
+    <button class="btn prim" id="btnActualizar" title="Vuelve a leer stock, programaciones y SIGED">Actualizar bases</button>
+    <button class="btn prim oculto" id="btnCargar" title="Elige el datos_priorizados.json que genera la app. Se lee en este navegador, no se sube a ningún lado">Cargar datos</button>
+    <input type="file" id="archivoDatos" accept=".json,application/json" class="oculto">
+  </div>
+</header>
+<div class="subbar">
+  <nav>
+    <button data-vista="arbol" class="on">Árbol 408</button>
+    <button data-vista="arbol867">Árbol 867</button>
+    <button data-vista="linea">Línea de tiempo</button>
+    <button data-vista="riesgo">Riesgo 408</button>
+    <button data-vista="riesgo867">Riesgo 867</button>
+    <button data-vista="lista">Expedientes</button>
+    <button data-vista="notas">Notas<span class="cuenta" id="nAvisos"></span></button>
+  </nav>
+  <div class="der">
+    <div class="seg" id="filtroModo" title="INAF + SIGED: avanza el estado con los documentos ya firmados en SIGED que INAF aún no registra">
+      <button data-m="inaf" class="on">Estado INAF</button>
+      <button data-m="siged">INAF + SIGED</button>
+    </div>
+    <div class="seg" id="filtroSub"></div>
+  </div>
+</div>
+<div id="nuevas" class="oculto">
+  <b>Hay bases nuevas en las carpetas.</b>
+  <span class="lista" id="nuevasLista"></span>
+  <span class="der">
+    <button class="btn chico prim" id="nuevasActualizar">Actualizar ahora</button>
+    <button class="btn chico" id="nuevasCerrar">Después</button>
+  </span>
+</div>
+<div id="vacio" class="oculto">
+  <h2>Carga los datos para ver los tableros</h2>
+  <p>Arrastra aquí el archivo <code>datos_priorizados.json</code> que genera la app al actualizar las bases, o elígelo desde tu equipo.</p>
+  <button class="btn prim" id="vacioCargar">Elegir archivo</button>
+  <small>El archivo se lee en este navegador. No se sube a ningún servidor ni queda guardado al cerrar la página.</small>
+</div>
+<main>
+  <section id="v-arbol">
+    <div class="hoja kpis" id="kpis"></div>
+    <div class="hoja plana">
+      <div class="barra cabA">
+        <h2>Árbol de estados</h2>
+        <span class="ley">
+          <span id="leyNuevos"><span class="pill">+n</span> nuevos no previstos</span>
+          <span><span class="punto"></span> sin programar este mes</span>
+          <span>Clic en una caja para ver sus expedientes</span>
+        </span>
+        <span class="der">
+          <label class="chk"><input type="checkbox" id="verNuevos" checked> Nuevos</label>
+          <label class="chk" title="Solo oculta la caja; el total de Concluidos no cambia"><input type="checkbox" id="verOtros" checked> Otros</label>
+          <button class="btn chico" data-imagen="svgArbol">Guardar imagen</button>
+        </span>
+      </div>
+      <div id="aResultado" class="oculto"></div>
+      <svg id="svgArbol" viewBox="0 0 1760 446"></svg>
+    </div>
+    <div class="hoja resumen">
+      <div class="barra"><h2>Texto para el reporte</h2><span class="der"><button class="btn chico" id="copiar">Copiar</button></span></div>
+      <div id="resumen"></div>
+    </div>
+  </section>
+
+  <section id="v-arbol867" class="oculto">
+    <div class="hoja kpis" id="kpis867"></div>
+    <div class="hoja plana">
+      <div class="barra cabA">
+        <h2>Árbol de estados</h2>
+        <span class="ley">
+          <span id="leyNuevos867"><span class="pill">+n</span> nuevos no previstos</span>
+          <span><span class="punto"></span> sin programar este mes</span>
+          <span>Clic en una caja para ver sus expedientes</span>
+        </span>
+        <span class="der">
+          <label class="chk"><input type="checkbox" id="verNuevos867" checked> Nuevos</label>
+          <label class="chk" title="Solo oculta la caja; el total de Concluidos no cambia"><input type="checkbox" id="verOtros867" checked> Otros</label>
+          <button class="btn chico" data-imagen="svgArbol867">Guardar imagen</button>
+        </span>
+      </div>
+      <div id="aResultado867" class="oculto"></div>
+      <svg id="svgArbol867" viewBox="0 0 1760 446"></svg>
+    </div>
+    <div class="hoja resumen">
+      <div class="barra"><h2>Texto por equipo</h2><span class="der"><button class="btn chico" id="exportar867">Exportar a Excel</button><button class="btn chico" id="copiar867">Copiar</button></span></div>
+      <div id="resumen867"></div>
+    </div>
+  </section>
+
+  <section id="v-lista" class="oculto">
+    <div class="barra">
+      <input type="search" id="lBuscar" placeholder="Filtrar por expediente, administrado, jefe…">
+      <div class="filtros" id="lFiltros"></div>
+      <button class="btn chico oculto" id="lLimpiar">Quitar filtros</button>
+      <span class="info" id="lInfo"></span>
+      <span class="der"><button class="btn" id="lExportar">Exportar a Excel</button></span>
+    </div>
+    <div class="hoja plana" id="lista-cuerpo"><table id="lTabla"></table></div>
+  </section>
+
+  <section id="v-linea" class="oculto">
+    <div class="hoja">
+      <div class="barra">
+        <h2>Línea de tiempo por subdirección</h2>
+        <span class="der">
+          <label class="chk"><input type="checkbox" id="conNuevos" checked> Nuevos</label>
+          <button class="btn chico" data-imagen="lineas">Guardar imagen</button>
+        </span>
+      </div>
+      <p class="expl">Cada columna es un mes. <b>Pendientes</b>: cuántos priorizados seguían pendientes al empezar el mes, según el stock INAF, por etapa.
+        <b>RSD, IFI y RD</b>: de lo programado ese mes, cuántos ya se ejecutaron según INAF, es decir, el expediente pasó a la etapa siguiente entre el primer stock del mes y el primero del mes siguiente (el mes en curso, hasta hoy).
+        «+n sin prog.» son ejecutados que no estaban en la programación; «n firm.» es lo que la programación marca como FIRMADO. Clic en una celda para ver los expedientes.</p>
+      <div class="barra" id="claveLinea" style="margin-bottom:6px"></div>
+      <div id="lineas"></div>
+    </div>
+  </section>
+
+  <section id="v-riesgo" class="oculto">
+    <div class="barra">
+      <label class="chk"><input type="checkbox" id="rNuevos" checked> Nuevos no previstos</label>
+      <span class="info">Fecha límite: la más próxima entre la prescripción y la caducidad que registra INAF, en cualquier etapa.</span>
+    </div>
+    <div class="hoja plana">
+      <div class="barra cabA">
+        <h2>Lista de alerta</h2>
+        <div class="seg" id="rUmbral">
+          <button data-d="30">Vencen en 30 días</button>
+          <button data-d="60" class="on">60 días</button>
+          <button data-d="90">90 días</button>
+        </div>
+        <div class="seg" id="rFiltro">
+          <button data-f="sin" class="on">Sin programar ni firmar</button>
+          <button data-f="todos">Todos</button>
+        </div>
+        <span class="info" id="rInfo"></span>
+        <span class="der"><button class="btn chico" id="rExportar">Exportar a Excel</button></span>
+      </div>
+      <p class="expl" id="rExpl" style="margin: 8px 20px 6px"></p>
+      <div id="alerta-cuerpo"><table id="rTabla"></table></div>
+    </div>
+    <div class="rfila">
+      <div class="hoja">
+        <h2>Calendario de vencimientos</h2>
+        <p class="expl" id="cExpl"></p>
+        <div id="matriz"></div>
+      </div>
+      <div class="hoja">
+        <div class="barra"><h2>Vencen por semana</h2><span class="der"><button class="btn chico" data-imagen="gSemanas">Guardar imagen</button></span></div>
+        <p class="expl" id="sExpl"></p>
+        <div id="gSemanas" class="grafico" style="height:330px"></div>
+      </div>
+    </div>
+    <div class="hoja">
+      <div class="barra"><h2>Curva de avance diaria</h2><span class="der"><button class="btn chico" data-imagen="gCurva">Guardar imagen</button></span></div>
+      <p class="expl" id="kExpl"></p>
+      <div id="gCurva" class="grafico" style="height:470px"></div>
+    </div>
+  </section>
+
+  <section id="v-riesgo867" class="oculto">
+    <div class="barra">
+      <label class="chk"><input type="checkbox" id="rNuevos867" checked> Nuevos no previstos</label>
+      <span class="info">Fecha límite: la más próxima entre la prescripción y la caducidad que registra INAF, en cualquier etapa.</span>
+    </div>
+    <div class="hoja plana">
+      <div class="barra cabA">
+        <h2>Lista de alerta</h2>
+        <div class="seg" id="rUmbral867">
+          <button data-d="30">Vencen en 30 días</button>
+          <button data-d="60" class="on">60 días</button>
+          <button data-d="90">90 días</button>
+        </div>
+        <div class="seg" id="rFiltro867">
+          <button data-f="sin" class="on">Sin programar ni firmar</button>
+          <button data-f="todos">Todos</button>
+        </div>
+        <span class="info" id="rInfo867"></span>
+        <span class="der"><button class="btn chico" id="rExportar867">Exportar a Excel</button></span>
+      </div>
+      <p class="expl" id="rExpl867" style="margin: 8px 20px 6px"></p>
+      <div id="alerta-cuerpo867"><table id="rTabla867"></table></div>
+    </div>
+    <div class="rfila">
+      <div class="hoja">
+        <h2>Calendario de vencimientos</h2>
+        <p class="expl" id="cExpl867"></p>
+        <div id="matriz867"></div>
+      </div>
+      <div class="hoja">
+        <div class="barra"><h2>Vencen por semana</h2><span class="der"><button class="btn chico" data-imagen="gSemanas867">Guardar imagen</button></span></div>
+        <p class="expl" id="sExpl867"></p>
+        <div id="gSemanas867" class="grafico" style="height:330px"></div>
+      </div>
+    </div>
+    <div class="hoja">
+      <div class="barra"><h2>Curva de avance diaria</h2><span class="der"><button class="btn chico" data-imagen="gCurva867">Guardar imagen</button></span></div>
+      <p class="expl" id="kExpl867"></p>
+      <div id="gCurva867" class="grafico" style="height:470px"></div>
+    </div>
+  </section>
+
+  <section id="v-notas" class="oculto">
+    <div class="hoja notas" id="notas"></div>
+  </section>
+</main>
+
+<div id="velo" class="oculto"></div>
+<aside id="panel" class="oculto">
+  <div class="cab">
+    <div>
+      <h2 id="pTitulo"></h2>
+      <div class="sub" id="pSub"></div>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+      <input type="search" id="pBuscar" placeholder="Filtrar por expediente, administrado, jefe…">
+      <button class="btn chico" id="pExportar">Exportar a Excel</button>
+      <button class="btn chico" id="pCerrar">Cerrar</button>
+    </div>
+  </div>
+  <div class="cuerpo"><table id="pTabla"></table></div>
+</aside>
+<div id="velo2" class="oculto"></div>
+<div id="ficha" class="oculto"></div>
+<div id="estado" class="oculto"></div>
+
+<script>
+"use strict";
+let D = null;                 // datos_priorizados.json
+let SUB = "Todas";
+let verOtros = true;          // caja "Otros" bajo Concluidos (boton Ocultar/Mostrar)
+let verNuevos = true;         // cajas grises de nuevos no previstos (boton Ocultar/Mostrar)
+let resaltado = null;         // expediente buscado en el arbol: { e, hoja }
+let MODO = "inaf";            // "inaf" o "siged" (INAF + documentos firmados en SIGED)
+const SUBS = ["Todas", "SFEM", "SFAP", "SFIS"];
+const NS = "http://www.w3.org/2000/svg";
+const $ = (s) => document.querySelector(s);
+// dentro de la app (Tauri) los datos vienen del motor en Rust; en un navegador, del JSON
+const esApp = () => !!(window.__TAURI__ && window.__TAURI__.core);
+const api = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
+
+// ------------------------------------------------------------ nodos del arbol
+const PEND = ["EAI", "INI", "IFI", "NUL"];
+const NODOS = {
+  raiz:    { t: "Priorizados", f: () => true },
+  conc:    { t: "Concluidos", f: (e) => !PEND.includes(e.categoria), rama: "conc" },
+  conc_rd: { t: "Con RD", f: (e) => e.categoria === "RD", rama: "conc" },
+  conc_ni: { t: "No inicio (RSD)", tl: "Concluido con RSD de no inicio", f: (e) => e.categoria === "NI", rama: "conc" },
+  conc_ot: { t: "Otros", f: (e) => e.categoria === "OTRO", rama: "conc" },
+  pend:    { t: "Pendientes", f: (e) => PEND.includes(e.categoria), rama: "pend" },
+  eai:     { t: "En análisis", tl: "En análisis de inicio", f: (e) => e.categoria === "EAI", et: "EAI" },
+  ini:     { t: "Iniciados", f: (e) => e.categoria === "INI", et: "INI" },
+  ifi:     { t: "Con IFI", tl: "Iniciados con IFI", f: (e) => e.categoria === "IFI", et: "IFI" },
+  nul:     { t: "Con nulidad", tl: "PAS con nulidad", f: (e) => e.categoria === "NUL", et: "NUL" },
+  eai_n:   { t: "RSD sin programar", f: (e) => e.categoria === "EAI" && !e.programado, et: "EAI", alerta: true },
+  eai_p:   { t: "RSD programada", f: (e) => e.categoria === "EAI" && e.programado, et: "EAI" },
+  ini_n:   { t: "IFI sin programar", f: (e) => e.categoria === "INI" && !e.programado, et: "INI", alerta: true },
+  ini_p:   { t: "IFI programado", f: (e) => e.categoria === "INI" && e.programado, et: "INI" },
+  ifi_n:   { t: "RD sin programar", f: (e) => e.categoria === "IFI" && !e.programado, et: "IFI", alerta: true },
+  ifi_p:   { t: "RD programada", f: (e) => e.categoria === "IFI" && e.programado, et: "IFI" },
+  nul_n:   { t: "RD sin programar", f: (e) => e.categoria === "NUL" && !e.programado, et: "NUL", alerta: true },
+  nul_p:   { t: "RD programada", f: (e) => e.categoria === "NUL" && e.programado, et: "NUL" },
+};
+// nombre largo para listas y fichas; en la caja va el corto
+const nombreNodo = (k) => NODOS[k].tl || NODOS[k].t;
+// centro x, nivel y padre de cada caja
+const LAYOUT = {
+  raiz:    [673, 0, null],
+  conc:    [252, 1, "raiz"],
+  pend:    [1094, 1, "raiz"],
+  conc_rd: [88, 2, "conc"],
+  conc_ni: [252, 2, "conc"],
+  conc_ot: [416, 2, "conc"],
+  eai:     [602, 2, "pend"],
+  ini:     [930, 2, "pend"],
+  ifi:     [1258, 2, "pend"],
+  nul:     [1586, 2, "pend"],
+  eai_n:   [520, 3, "eai"],
+  eai_p:   [684, 3, "eai"],
+  ini_n:   [848, 3, "ini"],
+  ini_p:   [1012, 3, "ini"],
+  ifi_n:   [1176, 3, "ifi"],
+  ifi_p:   [1340, 3, "ifi"],
+  nul_n:   [1504, 3, "nul"],
+  nul_p:   [1668, 3, "nul"],
+};
+const BW = 156, BH = 70, NIVEL_Y = [14, 130, 246, 362];   // medidas de caja
+const ANCHO_ARBOL = 1760, ALTO_ARBOL = 446;
+
+// los 867 y sus nuevos vienen aparte en el JSON: solo los usa su arbol
+const todosExp = () => D.expedientes.concat(D.expedientes_867 || []);
+function universo(grupo) {
+  const base = ["867", "NUEVO867", "AL_CORTE867"].includes(grupo) ? (D.expedientes_867 || []) : D.expedientes;
+  return base.filter((e) => e.grupo === grupo && (SUB === "Todas" || e.subdireccion === SUB));
+}
+
+// los dos arboles (y sus cifras clave) se dibujan igual, cada uno con sus casillas y su serie diaria
+let verNuevos867 = true, verOtros867 = true, resaltado867 = null;
+const ARBOL_408 = {
+  svg: "#svgArbol", grupo: "408", nuevo: "NUEVO", raiz: "Priorizados", de: "de los 408", kpis: "#kpis",
+  ids: { nuevos: "#verNuevos", otros: "#verOtros", ley: "#leyNuevos" },
+  nuevos: () => verNuevos, otros: () => verOtros, res: () => resaltado, serie: () => D.serie,
+};
+const ARBOL_867 = {
+  svg: "#svgArbol867", grupo: "867", nuevo: "NUEVO867", raiz: "Priorizados 867", de: "de los 867", kpis: "#kpis867",
+  ids: { nuevos: "#verNuevos867", otros: "#verOtros867", ley: "#leyNuevos867" },
+  nuevos: () => verNuevos867, otros: () => verOtros867, res: () => resaltado867, serie: () => D.serie_867,
+};
+
+function el(tag, attrs, padre, txt) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (txt !== undefined) n.textContent = txt;
+  if (padre) padre.appendChild(n);
+  return n;
+}
+
+const ESTILO_SVG = `
+  .a-t { font: 500 14px "Segoe UI Variable Text", "Segoe UI", sans-serif; fill: #52525b; }
+  .a-tr { fill: #a1a1aa; }
+  .a-n { font: 600 28px "Segoe UI Variable Display", "Segoe UI", sans-serif; fill: #18181b; font-variant-numeric: tabular-nums; }
+  .a-nr { fill: #ffffff; }
+  .a-p { font: 400 13.5px "Segoe UI", sans-serif; fill: #8a8a93; text-anchor: end; font-variant-numeric: tabular-nums; }
+  .a-cero .a-t, .a-cero .a-p { fill: #a1a1aa; }
+  .a-cero .a-n { fill: #c4c4cc; }
+  .a-bus { stroke: #d4d4d8; stroke-width: 1.25; fill: none; }
+  .a-caja { cursor: pointer; }
+  .a-marco { stroke-width: 1.25; }
+  .a-caja:hover .a-marco { stroke: #a1a1aa; }
+  .a-cam .a-marco { stroke: #71717a; }
+  .a-sel .a-marco { stroke: #18181b; stroke-width: 2.5; }
+  .a-badge { cursor: pointer; }
+  .a-badge rect { fill: #f4f4f5; stroke: #d4d4d8; }
+  .a-badge:hover rect, .a-badge.a-bsel rect { stroke: #18181b; }
+  .a-bt { font: 600 12.5px "Segoe UI", sans-serif; fill: #52525b; text-anchor: middle; }
+  .l-mes { font: 600 15px "Segoe UI", sans-serif; fill: #18181b; }
+  .l-fut { fill: #a1a1aa; }
+  .l-sub { font: 400 11.5px "Segoe UI", sans-serif; fill: #8a8a93; }
+  .l-subd { font: 600 20px "Segoe UI Variable Display", "Segoe UI", sans-serif; fill: #18181b; }
+  .l-et { font: 600 13.5px "Segoe UI", sans-serif; fill: #18181b; }
+  .l-num { font: 600 20px "Segoe UI Variable Display", "Segoe UI", sans-serif; fill: #18181b; font-variant-numeric: tabular-nums; }
+  .l-num2 { font: 600 15px "Segoe UI", sans-serif; fill: #18181b; font-variant-numeric: tabular-nums; }
+  .l-der { font: 400 11.5px "Segoe UI", sans-serif; fill: #8a8a93; text-anchor: end; font-variant-numeric: tabular-nums; }
+  .l-dato { font: 400 12.5px "Segoe UI", sans-serif; fill: #3f3f46; font-variant-numeric: tabular-nums; }
+  .l-vacio { font: 400 14px "Segoe UI", sans-serif; fill: #d4d4d8; }
+  .l-nada { font: 400 12.5px "Segoe UI", sans-serif; fill: #a1a1aa; }
+  .l-celda { cursor: pointer; }
+  .l-hit { fill: transparent; }
+  .l-celda:hover .l-hit { fill: #f1f1f3; }
+`;
+
+function dibujarArbol(A = ARBOL_408) {
+  const svg = $(A.svg);
+  svg.innerHTML = "";
+  el("style", {}, svg, ESTILO_SVG);
+  svg.setAttribute("viewBox", `0 0 ${ANCHO_ARBOL} ${ALTO_ARBOL}`);
+  el("rect", { x: 0, y: 0, width: ANCHO_ARBOL, height: ALTO_ARBOL, fill: "#fff" }, svg);
+  const u408 = universo(A.grupo), uNue = universo(A.nuevo);
+  const total = u408.length;
+  const cuenta = {};
+  for (const k in NODOS) cuenta[k] = [u408.filter(NODOS[k].f).length, uNue.filter(NODOS[k].f).length];
+  const conNuevos = A.nuevos(), conOtros = A.otros(), res = A.res();
+  $(A.ids.nuevos).checked = conNuevos;
+  $(A.ids.otros).checked = conOtros;
+  $(A.ids.ley).classList.toggle("oculto", !conNuevos);
+  const mostrarOtros = conOtros && cuenta.conc_ot[0] + (conNuevos ? cuenta.conc_ot[1] : 0) > 0;
+  const vis = (k) => k !== "conc_ot" || mostrarOtros;
+
+  // Concluidos se centra sobre sus hijos visibles; la raiz, entre Concluidos y Pendientes
+  const x = {};
+  for (const k in LAYOUT) x[k] = LAYOUT[k][0];
+  const hijosConc = ["conc_rd", "conc_ni", "conc_ot"].filter(vis);
+  x.conc = hijosConc.reduce((s, k) => s + x[k], 0) / hijosConc.length;
+  x.raiz = (x.conc + x.pend) / 2;
+  const y = (k) => NIVEL_Y[LAYOUT[k][1]];
+  const hijos = (k) => Object.keys(LAYOUT).filter((h) => LAYOUT[h][2] === k && vis(h));
+  const enCamino = (k) => res && caminoDe(res.hoja).includes(k);
+  const capaBus = el("g", {}, svg), capa = el("g", {}, svg);
+
+  // conectores en angulo recto: bajada del padre, barra horizontal y bajada a cada hijo
+  for (const k in LAYOUT) {
+    const hs = hijos(k);
+    if (!vis(k) || !hs.length) continue;
+    const yb = y(k) + BH, yh = y(hs[0]), ym = (yb + yh) / 2;
+    const xs = hs.map((h) => x[h]);
+    let d = `M${x[k]},${yb} V${ym} M${Math.min(...xs)},${ym} H${Math.max(...xs)}`;
+    xs.forEach((xh) => { d += ` M${xh},${ym} V${yh}`; });
+    el("path", { d, class: "a-bus" }, capaBus);
+  }
+
+  for (const k in LAYOUT) {
+    if (!vis(k)) continue;
+    const nodo = NODOS[k], [n, nn] = cuenta[k], raiz = k === "raiz";
+    const bx = x[k] - BW / 2, by = y(k);
+    const sel = res && res.hoja === k, cam = !sel && enCamino(k);
+    const cero = !raiz && n === 0, falta = nodo.alerta && n > 0;
+    const g = el("g", { class: "a-caja" + (cero ? " a-cero" : "") + (sel ? " a-sel" : cam ? " a-cam" : "") }, capa);
+    const fondo = raiz ? "#18181b" : cero ? "#fafafa" : falta ? "#fff7f2" : nodo.rama === "conc" ? "#f3f8f4" : "#ffffff";
+    const borde = raiz ? "#18181b" : cero ? "#ececef" : falta ? "#f5d0bd" : nodo.rama === "conc" ? "#d5e7da" : "#e4e4e7";
+    el("rect", { x: bx, y: by, width: BW, height: BH, rx: 8, fill: fondo, stroke: borde, class: "a-marco" }, g);
+    // franja con el color de la etapa
+    if (nodo.et) el("path", { d: `M${bx + 1.5},${by + 11} V${by + BH - 11}`, stroke: ETAPA_COLOR[nodo.et], "stroke-width": 3, "stroke-linecap": "round", opacity: cero ? 0.3 : 1 }, g);
+    el("text", { x: bx + 14, y: by + 25, class: raiz ? "a-t a-tr" : "a-t" }, g, raiz ? (SUB === "Todas" ? A.raiz : A.raiz + " · " + SUB) : nodo.t);
+    el("text", { x: bx + 14, y: by + 55, class: raiz ? "a-n a-nr" : "a-n" }, g, n);
+    // punto naranja: le falta programar el producto que le toca
+    if (nodo.alerta && n > 0) el("circle", { cx: bx + 22 + String(n).length * 15.5, cy: by + 45, r: 4, fill: "#ea580c" }, g);
+    if (!raiz) {
+      el("text", { x: bx + BW - 14, y: by + 55, class: "a-p" }, g, pctTxt(n, total));
+      const ancho = BW - 28, w = total ? Math.max(n ? 2 : 0, (ancho * n) / total) : 0;
+      if (!cero) el("rect", { x: bx + 14, y: by + BH - 9, width: ancho, height: 3, rx: 1.5, fill: falta ? "#fbe3d6" : nodo.rama === "conc" ? "#e2efe6" : "#f1f1f3" }, g);
+      if (w) el("rect", { x: bx + 14, y: by + BH - 9, width: w, height: 3, rx: 1.5, fill: nodo.et ? ETAPA_COLOR[nodo.et] : nodo.rama === "conc" ? "#0ca30c" : "#71717a" }, g);
+    }
+    el("title", {}, g, `${caminoDe(k).map(nombreNodo).join(" › ")}: ${n} ${A.de}${nn ? ` y ${nn} nuevos no previstos` : ""}`);
+    g.addEventListener("click", () => abrirPanel(k, A.grupo));
+    // nuevos no previstos: etiqueta sobre el borde de la caja; abre solo los nuevos
+    if (conNuevos && nn > 0) {
+      const txt = raiz ? `+${nn} nuevos` : `+${nn}`, ab = 12 + txt.length * 7.2;
+      const bsel = res && res.e.grupo === A.nuevo && (sel || cam);
+      const gb = el("g", { class: "a-badge" + (bsel ? " a-bsel" : "") }, capa);
+      el("rect", { x: bx + BW - ab - 8, y: by - 10, width: ab, height: 20, rx: 10 }, gb);
+      el("text", { x: bx + BW - 8 - ab / 2, y: by + 4.5, class: "a-bt" }, gb, txt);
+      el("title", {}, gb, `${nn} nuevos no previstos en ${nombreNodo(k)}`);
+      gb.addEventListener("click", () => abrirPanel(k, A.nuevo));
+    }
+  }
+}
+const pctTxt = (n, t) => t ? (n * 100 / t).toFixed(1).replace(/\.0$/, "") + "%" : "";
+
+// ------------------------------------------------------------ linea de tiempo
+// una columna por mes: pendientes al empezar (INAF) y, de lo programado, cuanto se ejecuto segun INAF
+const PRODUCTOS = [["RSD", "inicio o no inicio"], ["IFI", "informe final"], ["RD", "resolución final"]];
+// cada producto saca al expediente de una etapa: RSD de en analisis, IFI de iniciados, RD de con IFI
+const COLOR_PRODUCTO = { RSD: "#2a78d6", IFI: "#eb6834", RD: "#1baf7a" };
+function dibujarLineas() {
+  const cont = $("#lineas");
+  cont.innerHTML = "";
+  const M = (D.linea && D.linea.meses) || [];
+  $("#claveLinea").innerHTML = ETAPAS.map((c) => `<span class="clave"><i style="background:${ETAPA_COLOR[c]}"></i>${ETAPA_TXT[c]}</span>`).join("") +
+    `<span class="clave" style="color:var(--tenue)">· en RSD, IFI y RD la barra es lo programado ya ejecutado, con el color de la etapa de la que sale</span>`;
+  if (!M.length) { cont.innerHTML = `<div class="vacio">Sin datos de la línea de tiempo: pulsa «Actualizar bases».</div>`; return; }
+  const conN = $("#conNuevos").checked;
+  const subs = SUB === "Todas" ? D.linea.subdirecciones : [SUB];
+  const porExp = new Map(D.expedientes.map((e) => [e.expediente, e]));
+  const vale = (k) => { const e = porExp.get(k); return !!e && (conN || e.grupo === "408"); };
+  const v = (par) => (par ? (conN ? par[0] + par[1] : par[0]) : 0);
+  const ANCHO = 1460, X0 = 176;
+  // los meses que aun no tienen datos van angostos: el ancho queda para los que si
+  const pesos = M.map((m) => (m.inicio ? 1 : 0.4)), sumaP = pesos.reduce((a, b) => a + b, 0);
+  const anchos = pesos.map((p) => ((ANCHO - X0) * p) / sumaP);
+  const xs = anchos.map((_, i) => X0 + anchos.slice(0, i).reduce((a, b) => a + b, 0));
+  const CAB = 56, TIT = 46, FP = 92, FPR = 62;            // alturas: cabecera, titulo, pendientes, cada producto
+  const ALTO_SUB = TIT + FP + FPR * PRODUCTOS.length + 14;
+  const alto = CAB + ALTO_SUB * subs.length;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${ANCHO} ${alto}`);
+  svg.id = "svgLineas";
+  cont.appendChild(svg);
+  el("style", {}, svg, ESTILO_SVG);
+  el("rect", { x: 0, y: 0, width: ANCHO, height: alto, fill: "#fff" }, svg);
+
+  // cabecera: un mes por columna; el mes en curso, sombreado
+  M.forEach((m, i) => {
+    const x = xs[i], CW = anchos[i];
+    if (m.en_curso) el("rect", { x: x + 2, y: 0, width: CW - 4, height: alto, rx: 8, fill: "#f7f7f8" }, svg);
+    el("text", { x: x + 12, y: 22, class: "l-mes" + (m.inicio ? "" : " l-fut") }, svg, `${m.etiqueta} ${m.anio}`);
+    const sub = m.en_curso ? `en curso, al ${m.hasta}` : m.productos ? `del ${m.desde} al ${m.hasta}` : m.inicio ? "aún sin programación" : "";
+    el("text", { x: x + 12, y: 40, class: "l-sub" }, svg, sub);
+  });
+
+  subs.forEach((s, j) => {
+    const y0 = CAB + j * ALTO_SUB;
+    el("line", { x1: 0, x2: ANCHO, y1: y0 + 0.5, y2: y0 + 0.5, stroke: "#e4e4e7" }, svg);
+    el("text", { x: 0, y: y0 + 32, class: "l-subd" }, svg, s);
+
+    // pendientes al empezar cada mes: total, barra por etapa (larga segun el mes con mas pendientes) y cifras
+    const yP = y0 + TIT;
+    el("text", { x: 0, y: yP + 20, class: "l-et" }, svg, "Pendientes");
+    el("text", { x: 0, y: yP + 37, class: "l-sub" }, svg, "al empezar el mes (INAF)");
+    const cuentaDe = (m) => m.inicio && m.inicio.cuenta && m.inicio.cuenta[s];
+    const totales = M.map((m) => { const c = cuentaDe(m); return c ? ETAPAS.reduce((t, et) => t + v(c[et]), 0) : null; });
+    const maxT = Math.max(1, ...totales.filter((t) => t !== null));
+    M.forEach((m, i) => {
+      const x = xs[i] + 12, w = anchos[i] - 24, c = cuentaDe(m);
+      if (!c) { el("text", { x, y: yP + 20, class: "l-vacio" }, svg, "·"); return; }
+      const g = el("g", {}, svg);
+      el("text", { x, y: yP + 20, class: "l-num" }, g, totales[i]);
+      el("text", { x: x + w, y: yP + 20, class: "l-der" }, g, "al " + m.inicio.fecha);
+      let bx = x;
+      const bw = (w * totales[i]) / maxT;
+      ETAPAS.forEach((et) => {
+        const n = v(c[et]);
+        if (!n) return;
+        const ww = (bw * n) / totales[i];
+        el("rect", { x: bx, y: yP + 30, width: Math.max(ww - 1.5, 1), height: 8, rx: 1.5, fill: ETAPA_COLOR[et] }, g);
+        bx += ww;
+      });
+      ETAPAS.forEach((et, q) => {
+        const xx = x + (q % 2) * (w / 2), yy = yP + 60 + Math.floor(q / 2) * 18;
+        el("circle", { cx: xx + 4, cy: yy - 4, r: 3.5, fill: ETAPA_COLOR[et] }, g);
+        el("text", { x: xx + 12, y: yy, class: "l-dato" }, g, v(c[et]));
+      });
+      el("title", {}, g, `${s}, pendientes al ${m.inicio.fecha}\n` + ETAPAS.map((et) => `${ETAPA_TXT[et]}: ${v(c[et])}`).join("\n"));
+    });
+
+    // productos del mes: programados ya ejecutados de los programados, barra y notas
+    PRODUCTOS.forEach(([tp, desc], r) => {
+      const yR = yP + FP + r * FPR;
+      el("line", { x1: 0, x2: ANCHO, y1: yR - 8, y2: yR - 8, stroke: "#f0f0f2" }, svg);
+      el("text", { x: 0, y: yR + 16, class: "l-et" }, svg, tp);
+      el("text", { x: 0, y: yR + 33, class: "l-sub" }, svg, desc);
+      M.forEach((m, i) => {
+        const x = xs[i] + 12, w = anchos[i] - 24;
+        const d = m.productos && m.productos[s] && m.productos[s][tp];
+        if (!d) { el("text", { x, y: yR + 16, class: "l-vacio" }, svg, "·"); return; }
+        const prog = d.prog.filter(vale), firm = d.firm.filter(vale), ejec = d.ejec.filter(vale);
+        const sP = new Set(prog), sE = new Set(ejec);
+        const hechos = prog.filter((k) => sE.has(k)).length, extra = ejec.filter((k) => !sP.has(k)).length;
+        const g = el("g", { class: "l-celda" }, svg);
+        el("rect", { x: x - 8, y: yR - 5, width: w + 16, height: FPR - 6, rx: 6, class: "l-hit" }, g);
+        if (prog.length) {
+          el("text", { x, y: yR + 16, class: "l-num2" }, g, `${hechos} de ${prog.length}`);
+          el("text", { x: x + w, y: yR + 16, class: "l-der" }, g, pctTxt(hechos, prog.length));
+          el("rect", { x, y: yR + 24, width: w, height: 5, rx: 2.5, fill: "#f1f1f3" }, g);
+          if (hechos) el("rect", { x, y: yR + 24, width: Math.max(2, (w * hechos) / prog.length), height: 5, rx: 2.5, fill: COLOR_PRODUCTO[tp] }, g);
+        } else el("text", { x, y: yR + 16, class: "l-nada" }, g, "sin programación");
+        if (extra) el("text", { x, y: yR + 45, class: "l-sub" }, g, `+${extra} sin prog.`);
+        if (prog.length || firm.length) el("text", { x: x + w, y: yR + 45, class: "l-der" }, g, `${firm.length} firm.`);
+        el("title", {}, g, `${tp} · ${m.mes} · ${s}\nProgramados: ${prog.length}\nEjecutados según INAF: ${ejec.length} (${hechos} programados, ${extra} sin programar)\n` +
+          `Programados sin ejecutar: ${prog.length - hechos}\nFirmados según la programación: ${firm.length}`);
+        g.addEventListener("click", () => abrirCumplimiento(tp, m, s, prog, firm, ejec));
+      });
+    });
+  });
+}
+
+// ------------------------------------------------------------ tablas de expedientes
+const COLS = [
+  ["n", "#", (e, i) => i + 1, "num"],
+  ["expediente", "Expediente", (e) => e.expediente, "exp"],
+  ["grupo", "Grupo", (e) => e.grupo === "408" ? `408 · ${e.id408}` : e.grupo === "867" ? `867 · ${e.id867}` + (e.en_408 ? " · en 408" : "") : e.grupo === "NUEVO" ? "Nuevo" : e.grupo === "NUEVO867" ? "Nuevo 867" : e.grupo === "AL_CORTE867" ? "Al corte 867" : "Al corte"],
+  ["subdireccion", "Subd.", (e) => e.subdireccion],
+  ["sector", "Sector", (e) => e.sector],
+  ["administrado", "Administrado", (e) => e.administrado],
+  ["jefe", "Jefe de equipo", (e) => e.jefe],
+  ["estado_inaf", "Estado INAF", (e) => e.estado_inaf],
+  ["limite", "Fecha límite", (e) => e.limite ? `${fmt(e.limite)} · ${e.tipo_limite.slice(0, 5)}.` : e.tipo_limite],
+  ["dias_limite", "Días", (e) => e.dias_limite ?? "", "num"],
+  ["programado", "Programado", null],
+  ["programacion", "Programación del mes", (e) => e.programacion.join(" | ")],
+];
+// la lista general agrega en que caja del arbol esta cada uno
+const COLS_LISTA = [...COLS.slice(0, 8), ["caja", "Caja del árbol", (e) => cajaCorta(e)], ...COLS.slice(8)];
+// el panel de una celda de la linea de tiempo dice, para cada expediente, si lo programado se ejecuto
+const COLS_CUMPLE = [COLS[0], COLS[1], COLS[2], ["_sit", "Situación en el mes", (e) => e._sit], COLS[5], COLS[6], COLS[7]];
+
+function abrirCumplimiento(tp, m, s, prog, firm, ejec) {
+  const porExp = new Map(D.expedientes.map((e) => [e.expediente, e]));
+  const sP = new Set(prog), sF = new Set(firm), sE = new Set(ejec);
+  const filas = [...new Set([...prog, ...ejec])].map((k) => porExp.get(k)).filter(Boolean);
+  for (const e of filas) {
+    const p = sP.has(e.expediente), x = sE.has(e.expediente);
+    e._sit = p && x ? "Ejecutado" : p ? (sF.has(e.expediente) ? "Sin ejecutar (la programación lo marca firmado)" : "Sin ejecutar") : "Ejecutado sin programar";
+  }
+  abrirTabla(`${tp} · ${m.mes} · ${s}`, filas, COLS_CUMPLE);
+}
+
+// estado de cada tabla: filas, orden y sus elementos en pantalla
+const panel = { filas: [], orden: "dias_limite", asc: true, cols: COLS, tabla: "#pTabla", buscar: "#pBuscar", info: "#pSub" };
+const lista = { filas: [], orden: "id408", asc: true, cols: COLS_LISTA, tabla: "#lTabla", buscar: "#lBuscar", info: "#lInfo" };
+
+function fmt(isoTxt) {
+  if (!isoTxt) return "";
+  const [a, m, d] = isoTxt.slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
+}
+
+// "0993-2023-OEFA/DFAI/PAS" se encuentra con "993-2023", "0993 2023" o "993-2023-OEFA-DFAI-PAS"
+const normal = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\/\s.]+/g, "-");
+function textoBusqueda(e) {
+  if (!e._busca) e._busca = normal([e.expediente, e.expediente.replace(/^0+/, ""), e.administrado, e.jefe, e.analista,
+    e.sector, e.estado_inaf, e.informe, e.uf, e.rsd_inicio, e.programacion.join(" ")].join(" "));
+  return e._busca;
+}
+function limpiarConsulta(q) {
+  return normal(q.trim().replace(/^exp(ediente)?\.?\s*/i, ""));
+}
+function coincide(e, q) {
+  const n = limpiarConsulta(q);
+  return !n || textoBusqueda(e).includes(n);
+}
+
+const NOMBRE_GRUPO = { "408": "408 priorizados", NUEVO: "Nuevos no previstos", "867": "Priorizados 867", NUEVO867: "Nuevos no previstos (867)" };
+function abrirPanel(nodo, grupo) {
+  const filas = universo(grupo).filter(NODOS[nodo].f);
+  const camino = caminoDe(nodo).map((k) => k === "raiz" ? NOMBRE_GRUPO[grupo] : nombreNodo(k));
+  if (nodo !== "raiz" && grupo === "NUEVO") camino[0] = "Nuevos no previstos";
+  abrirTabla(camino.join(" › "), filas);
+}
+
+function abrirTabla(titulo, filas, cols = COLS) {
+  Object.assign(panel, { filas, cols, orden: cols === COLS ? "dias_limite" : "_sit", asc: true });
+  $("#pTitulo").textContent = titulo;
+  $("#pBuscar").value = "";
+  $("#velo").classList.remove("oculto");
+  $("#panel").classList.remove("oculto");
+  pintarTabla(panel);
+}
+
+function cerrarPanel() {
+  $("#velo").classList.add("oculto");
+  $("#panel").classList.add("oculto");
+}
+
+function filasVisibles(est) {
+  const q = est.buscar ? $(est.buscar).value : "";
+  const f = est.filas.filter((e) => coincide(e, q));
+  const k = est.orden, s = est.asc ? 1 : -1;
+  const valor = (e) => k === "caja" ? cajaCorta(e) : e[k];
+  return f.sort((a, b) => {
+    let x = valor(a), y = valor(b);
+    if (x === null || x === undefined || x === "") return 1;
+    if (y === null || y === undefined || y === "") return -1;
+    if (typeof x === "boolean") { x = +x; y = +y; }
+    return (x > y ? 1 : x < y ? -1 : 0) * s;
+  });
+}
+
+function pintarTabla(est) {
+  const filas = filasVisibles(est);
+  const sub = SUB === "Todas" ? "" : ` · ${SUB}`;
+  $(est.info).textContent = `${filas.length} expedientes${sub} · stock al ${fmt(D.corte_stock)} · programación ${D.mes_programacion}`;
+  const t = $(est.tabla);
+  est.visibles = filas;
+  escucharTabla(est);
+  const cab = est.cols.map(([k, n]) => `<th data-k="${k}">${n} <span class="flecha">${est.orden === k ? (est.asc ? "▲" : "▼") : ""}</span></th>`).join("");
+  const cuerpo = filas.map((e, i) => `<tr data-i="${i}">` + est.cols.map(([k, , f, cl]) => {
+    if (k === "programado") {
+      if (!e.producto_esperado) return "<td></td>";
+      return `<td><span class="chip ${e.programado ? "si" : "no"}">${e.producto_esperado} ${e.programado ? "sí" : "no"}</span></td>`;
+    }
+    let v = f(e, i);
+    let clase = cl || "";
+    if (k === "dias_limite" && typeof e.dias_limite === "number" && e.dias_limite < 0) clase += " vencido";
+    if (k === "grupo" && e.grupo !== "408") v = `<span class="chip nuevo">${v}</span>`;
+    else if (k === "dias_limite" && v !== "") v = `<span class="dias ${semaforo(e)}" title="${SEM_TXT[semaforo(e)]}">${v}</span>`;
+    else if (k === "categoria" && movidoPorSiged(e)) v = `${escapar(v)} <span class="chip siged" title="${escapar(e.siged.map((d) => d.numero).join(" | "))}">SIGED</span>`;
+    else if (k === "estado_inaf" && movidoPorSiged(e)) v = `${escapar(v)} <span class="chip siged" title="${escapar(e.siged.map((d) => d.numero).join(" | "))}">SIGED: ${e.siged.map((d) => d.tipo).join(" + ")} firmado</span>`;
+    else if (k === "estado_inaf" && MODO === "siged" && e.siged_nota) v = `${escapar(v)} <span class="chip" title="${escapar(e.siged_nota)}">RSD sin sentido</span>`;
+    else if (k === "_sit") v = `<span class="chip ${v === "Ejecutado" ? "si" : v.startsWith("Sin") ? "no" : ""}">${escapar(v)}</span>`;
+    else if (k === "programacion") v = e.programacion.map((p) => `<span class="tag">${escapar(p)}</span>`).join("");
+    else v = escapar(v);
+    // textos largos: se recortan y se ven completos al pasar el mouse
+    const largo = ["administrado", "jefe", "sector", "estado_inaf"].includes(k);
+    if (largo) clase += " cort";
+    return `<td class="${clase}"${largo ? ` title="${escapar(f(e, i))}"` : ""}>${v}</td>`;
+  }).join("") + "</tr>").join("");
+  t.innerHTML = `<thead><tr>${cab}</tr></thead><tbody>${cuerpo || `<tr><td colspan="${est.cols.length}" class="vacio">Sin expedientes</td></tr>`}</tbody>`;
+}
+
+// un solo escucha por tabla (no uno por fila): ordenar al tocar la cabecera, ficha al tocar una fila
+function escucharTabla(est) {
+  const t = $(est.tabla);
+  if (t.dataset.escucha) return;
+  t.dataset.escucha = "1";
+  t.addEventListener("click", (ev) => {
+    const th = ev.target.closest("th[data-k]");
+    if (th) {
+      const k = th.dataset.k;
+      if (k === "n") return;
+      est.asc = est.orden === k ? !est.asc : true;
+      est.orden = k;
+      pintarTabla(est);
+      return;
+    }
+    const tr = ev.target.closest("tbody tr[data-i]");
+    if (tr) abrirFicha(est.visibles[+tr.dataset.i]);
+  });
+}
+
+// ------------------------------------------------------------ ubicacion en el arbol
+const HOJAS = ["conc_rd", "conc_ni", "conc_ot", "eai_n", "eai_p", "ini_n", "ini_p", "ifi_n", "ifi_p", "nul_n", "nul_p"];
+
+function caminoDe(nodo) {
+  const c = [];
+  for (let k = nodo; k; k = LAYOUT[k][2]) c.unshift(k);
+  return c;
+}
+
+function hojaDe(e) {
+  if (e.grupo === "AL_CORTE" || e.grupo === "AL_CORTE867") return null;
+  return HOJAS.find((k) => NODOS[k].f(e)) || null;
+}
+
+function caminoTexto(e) {
+  const h = hojaDe(e);
+  if (!h) return "";
+  return [NOMBRE_GRUPO[e.grupo], ...caminoDe(h).slice(1).map(nombreNodo)].join(" › ");
+}
+
+function cajaCorta(e) {
+  const h = hojaDe(e);
+  return h ? caminoDe(h).slice(-2).map((k) => NODOS[k].t).join(" › ") : "Fuera del árbol (al corte)";
+}
+
+// ------------------------------------------------------------ ficha de un expediente
+function abrirFicha(e) {
+  const f = $("#ficha");
+  f.style.setProperty("--et", ETAPA_COLOR[e.categoria] || (NODOS.conc.f(e) ? "#1d6b35" : "#d4d4d8"));
+  const fila = (n, v) => (v === "" || v === null || v === undefined) ? "" : `<dt>${n}</dt><dd>${escapar(v)}</dd>`;
+  const grupo = e.grupo === "408" ? `De los 408 · ID ${e.id408}` : e.grupo === "867" ? `De los 867 · N.° ${e.id867} · ${(e.equipo || "").toLowerCase()}${e.en_408 ? " · también en los 408" : ""}`
+    : e.grupo === "NUEVO" ? `Nuevo no previsto · detectado el ${fmt(e.primera_vez)}`
+    : e.grupo === "NUEVO867" ? `Nuevo no previsto (867) · detectado el ${fmt(e.primera_vez)}`
+    : e.grupo === "AL_CORTE867" ? "Al corte, fuera de los 867" : "Al corte, fuera de los 408";
+  const prog = e.producto_esperado ? `${e.producto_esperado}: ${e.programado ? "sí está programado" : "no está programado"}` : "";
+  const ubic = hojaDe(e)
+    ? `<span>En el árbol: <b>${escapar(caminoTexto(e))}</b></span> <button class="btn chico" id="fVerArbol" style="margin-left:auto">Ver en el árbol</button>`
+    : `No se dibuja en el árbol: cumplía el criterio al corte pero no está en los ${e.grupo === "AL_CORTE867" ? "867" : "408"}.`;
+  f.innerHTML = `
+    <div class="cab">
+      <div><h2>${escapar(e.expediente)}</h2><div class="sub">${escapar(grupo)} · ${escapar(e.subdireccion)}</div></div>
+      <button class="btn chico" id="fCerrar" style="margin-left:auto">Cerrar</button>
+    </div>
+    <div class="resF">
+      <div><small>Etapa</small><b>${ETAPA_COLOR[e.categoria] ? `<span class="clave" style="margin:0"><i style="background:${ETAPA_COLOR[e.categoria]}"></i></span>` : ""}${escapar(NOMBRE_NODO[e.categoria] || e.categoria)}</b></div>
+      <div><small>Programación de ${escapar(D.mes_programacion)}</small><b>${e.producto_esperado ? `<span class="chip ${e.programado ? "si" : "no"}">${e.producto_esperado} ${e.programado ? "programado" : "sin programar"}</span>` : "no le toca producto"}</b></div>
+    </div>
+    <div class="ubic">${ubic}</div>
+    <dl>
+      <h3>Administrado</h3>
+      ${fila("Administrado", e.administrado)}${fila("Unidad fiscalizable", e.uf)}
+      ${fila("Sector", e.sector)}${fila("Subsector", e.subsector)}
+      ${fila("Informe de supervisión", e.informe)}${fila("Complejidad", e.complejidad)}${fila("Conflicto", e.conflicto)}
+      <h3>Estado</h3>
+      ${fila("Estado INAF", e.estado_inaf)}${fila("Caja según INAF", NOMBRE_NODO[e.categoria_inaf])}
+      ${e.siged && e.siged.length ? fila("Caja con SIGED", NOMBRE_NODO[e.categoria_siged]) + e.siged.map((d, i) => fila(i ? "" : "Firmado en SIGED (no en INAF)", `${d.tipo} · ${d.numero} · ${fmt(d.fecha)} · ${d.firmante}`)).join("") : ""}
+      ${fila("Nota SIGED", e.siged_nota)}${fila("RSD de inicio", e.rsd_inicio)}
+      ${fila("Jefe de equipo", e.jefe)}${fila("Analista", e.analista)}
+      <h3>Riesgo</h3>
+      ${fila("Prescripción", fmt(e.prescripcion) || "sin fecha en INAF")}${fila("Caducidad", fmt(e.caducidad) || "sin fecha en INAF")}
+      <h3>Programación de ${escapar(D.mes_programacion)}</h3>
+      ${fila("Producto que le toca", prog)}
+      ${e.programacion.length ? e.programacion.map((p, i) => fila(i ? "" : "Programado", p)).join("") : fila("Programado", "nada en la programación del mes")}
+      ${e.grupo === "408" ? `<h3>En la lista de 408</h3>${fila("ID", e.id408)}${fila("Mes de riesgo (lista)", e.mes_riesgo_lista)}${fila("Estado en la lista", e.estado_lista)}` : ""}
+      ${e.grupo === "867" ? `<h3>En la lista de 867</h3>${fila("N.°", e.id867)}${fila("Equipo", e.equipo)}${fila("Estado en la lista", e.estado_lista)}` : ""}
+    </dl>`;
+  $("#velo2").classList.remove("oculto");
+  f.classList.remove("oculto");
+  $("#fCerrar").addEventListener("click", cerrarFicha);
+  const ver = $("#fVerArbol");
+  if (ver) ver.addEventListener("click", () => {
+    cerrarFicha();
+    cerrarPanel();
+    if (e.grupo === "867" || e.grupo === "NUEVO867") { mostrarVista("arbol867"); ubicarEn867(e); }
+    else { mostrarVista("arbol"); ubicarEnArbol(e); }
+  });
+}
+
+// marca en el arbol de 867 la caja de un expediente (desde su ficha)
+function ubicarEn867(e) {
+  const r = $("#aResultado867"), hoja = hojaDe(e);
+  if (SUB !== "Todas" && e.subdireccion !== SUB) cambiarSub("Todas");
+  if (hoja === "conc_ot") verOtros867 = true;
+  if (e.grupo === "NUEVO867") verNuevos867 = true;
+  resaltado867 = { e, hoja };
+  dibujarArbol(ARBOL_867);
+  r.classList.remove("oculto");
+  const quien = e.grupo === "867" ? `N.° ${escapar(e.id867)} de los 867` : "nuevo no previsto";
+  r.innerHTML = `<span><b>${escapar(e.expediente.replace("-OEFA/DFAI/PAS", ""))}</b>, ${quien}, ${escapar(e.subdireccion)}, está en <span class="camino">${escapar(caminoTexto(e))}</span>` +
+    (e.grupo === "NUEVO867" ? " (etiqueta +n)" : "") + "</span>" +
+    ` <span class="der"><button class="btn chico" id="aFicha867">Ver ficha</button><button class="btn chico" id="aQuitar867">Quitar</button></span>`;
+  $("#aFicha867").addEventListener("click", () => abrirFicha(e));
+  $("#aQuitar867").addEventListener("click", () => { resaltado867 = null; r.classList.add("oculto"); dibujarArbol(ARBOL_867); });
+  $("#svgArbol867").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function cerrarFicha() {
+  $("#velo2").classList.add("oculto");
+  $("#ficha").classList.add("oculto");
+}
+
+// ------------------------------------------------------------ pestana Expedientes
+// Cada filtro tiene una o mas secciones; dentro de una seccion vale cualquiera de lo marcado y entre
+// filtros (o secciones) deben cumplirse todos. Sin nada marcado, el filtro no filtra.
+const GRUPO_TXT = { "408": "408", NUEVO: "Nuevos 408", "867": "867", NUEVO867: "Nuevos 867" };
+const riesgoDe = (e) => PEND.includes(e.categoria) ? semaforo(e) : "conc";
+function riesgoTxt(v) {
+  const [r, a] = D.semaforo_dias || [30, 60];
+  return { venc: "Vencida", rojo: `Vence en ${r} días o menos`, ambar: `Vence en ${r + 1} a ${a} días`, verde: `Vence en más de ${a} días`,
+    sin: "Pendiente sin fecha en INAF", conc: "Concluido (no aplica)" }[v];
+}
+const FILTROS_LISTA = [
+  { k: "jefe", t: "Jefe de equipo", buscar: true, sec: [{ val: (e) => e.jefe || "(sin jefe)" }] },
+  { k: "sub", t: "Subdirección", sec: [{ val: (e) => e.subdireccion, orden: ["SFEM", "SFAP", "SFIS", "SIN SUBD."] }] },
+  { k: "grupo", t: "Grupo", sec: [{ val: (e) => e.grupo, txt: (v) => GRUPO_TXT[v], orden: Object.keys(GRUPO_TXT) }] },
+  { k: "adm", t: "Administrado", buscar: true, ancho: true, sec: [{ val: (e) => e.administrado || "(sin administrado)" }] },
+  // la misma caja de la columna: sigue el selector INAF / INAF + SIGED
+  { k: "caja", t: "Caja del árbol", ancho: true, sec: [{ val: (e) => hojaDe(e) || "fuera", orden: [...HOJAS, "fuera"],
+    txt: (v) => v === "fuera" ? "Fuera del árbol" : caminoDe(v).slice(-2).map((k) => NODOS[k].t).join(" › ") }] },
+  // tal como viene en el stock INAF (no cambia con el selector INAF + SIGED)
+  { k: "estado", t: "Estado INAF", ancho: true, sec: [{ val: (e) => e.estado_inaf || "(sin estado)" }] },
+  { k: "riesgo", t: "Riesgo", sec: [
+    { t: "Fecha límite (semáforo)", val: riesgoDe, txt: riesgoTxt, orden: ["venc", "rojo", "ambar", "verde", "sin", "conc"] },
+    { t: "Tipo de riesgo en INAF", val: (e) => e.tipo_riesgo || "SIN FECHA", orden: ["PRESCRIPCIÓN", "CADUCIDAD", "SIN FECHA"],
+      txt: (v) => ({ PRESCRIPCIÓN: "Prescripción", CADUCIDAD: "Caducidad" }[v] || "Sin fecha") },
+  ] },
+];
+const filtro = { sel: Object.fromEntries(FILTROS_LISTA.map((f) => [f.k, f.sec.map(() => new Set())])), q: {}, abierto: null, base: [] };
+
+// pasa todos los filtros salvo, si se indica, una seccion de un filtro (para contar sus opciones)
+function pasaFiltros(e, salvoK, salvoI) {
+  return FILTROS_LISTA.every((f) => f.sec.every((s, i) => {
+    const sel = filtro.sel[f.k][i];
+    return (f.k === salvoK && i === salvoI) || !sel.size || sel.has(s.val(e));
+  }));
+}
+
+function dibujarLista() {
+  // los 15 que estan en las dos listas salen una vez por cada una (con su grupo)
+  filtro.base = ["408", "NUEVO", "867", "NUEVO867"].flatMap(universo);
+  lista.filas = filtro.base.filter((e) => pasaFiltros(e));
+  pintarTabla(lista);
+  pintarBotonesFiltro();
+  if (filtro.abierto) pintarOpciones(filtro.abierto);
+}
+
+function pintarBotonesFiltro() {
+  const cont = $("#lFiltros");
+  if (!cont.children.length) {
+    cont.innerHTML = FILTROS_LISTA.map((f) => `<div class="filtro" data-k="${f.k}"><button class="btn">${f.t}<span class="n oculto"></span><span class="fl">▼</span></button>` +
+      `<div class="menu oculto${f.ancho ? " ancho" : ""}"></div></div>`).join("");
+  }
+  let hay = false;
+  for (const f of FILTROS_LISTA) {
+    const n = filtro.sel[f.k].reduce((t, s) => t + s.size, 0);
+    hay = hay || n > 0;
+    const b = cont.querySelector(`.filtro[data-k="${f.k}"] > .btn`);
+    b.classList.toggle("activo", n > 0);
+    b.querySelector(".n").textContent = n;
+    b.querySelector(".n").classList.toggle("oculto", !n);
+  }
+  $("#lLimpiar").classList.toggle("oculto", !hay);
+}
+
+function abrirFiltro(k) {
+  cerrarFiltro();
+  const f = FILTROS_LISTA.find((x) => x.k === k), caja = $(`#lFiltros .filtro[data-k="${k}"]`), menu = caja.querySelector(".menu");
+  filtro.abierto = k;
+  menu.innerHTML = (f.buscar ? `<input type="search" placeholder="Buscar ${f.t.toLowerCase()}…" value="${escapar(filtro.q[k] || "")}">` : "") +
+    `<div class="acc"><button class="btn chico" data-acc="todo">${f.buscar ? "Marcar los mostrados" : "Marcar todo"}</button><button class="btn chico" data-acc="nada">Limpiar</button></div>` +
+    `<div class="opciones"></div>`;
+  menu.classList.remove("oculto", "a-izq");
+  // si no cabe a la derecha, se abre hacia la izquierda
+  if (menu.getBoundingClientRect().right > document.documentElement.clientWidth - 8) menu.classList.add("a-izq");
+  pintarOpciones(k);
+  const q = menu.querySelector("input[type=search]");
+  if (q) q.focus();
+}
+
+function cerrarFiltro() {
+  if (!filtro.abierto) return;
+  $(`#lFiltros .filtro[data-k="${filtro.abierto}"] .menu`).classList.add("oculto");
+  filtro.abierto = null;
+}
+
+// opciones visibles de cada seccion: [valor, texto, cuantos quedarian al marcarla]
+function opcionesFiltro(f) {
+  const q = normal(filtro.q[f.k] || "");
+  return f.sec.map((s, i) => {
+    const cuenta = new Map();
+    for (const e of filtro.base) { const v = s.val(e); if (!cuenta.has(v)) cuenta.set(v, 0); }
+    for (const e of filtro.base) if (pasaFiltros(e, f.k, i)) cuenta.set(s.val(e), cuenta.get(s.val(e)) + 1);
+    const txt = (v) => (s.txt ? s.txt(v) : v) || v;
+    let ops = [...cuenta.keys()].map((v) => [v, txt(v), cuenta.get(v)]);
+    ops = s.orden ? ops.sort((a, b) => s.orden.indexOf(a[0]) - s.orden.indexOf(b[0])) : ops.sort((a, b) => a[1].localeCompare(b[1], "es"));
+    return q ? ops.filter((o) => normal(o[1]).includes(q)) : ops;
+  });
+}
+
+function pintarOpciones(k) {
+  const f = FILTROS_LISTA.find((x) => x.k === k), cont = $(`#lFiltros .filtro[data-k="${k}"] .opciones`);
+  if (!cont) return;
+  const y = cont.scrollTop;
+  const secciones = opcionesFiltro(f);
+  cont.innerHTML = secciones.map((ops, i) => (f.sec[i].t ? `<h4>${f.sec[i].t}</h4>` : "") +
+    (ops.map(([v, t, n]) => `<label class="${n ? "" : "cero"}"><input type="checkbox" data-i="${i}" value="${escapar(v)}"${filtro.sel[k][i].has(v) ? " checked" : ""}>` +
+      `<span title="${escapar(t)}">${escapar(t)}</span><small>${n}</small></label>`).join("") || `<div class="vacio">Sin coincidencias</div>`)).join("");
+  cont.scrollTop = y;
+}
+
+function eventosFiltros() {
+  const cont = $("#lFiltros");
+  cont.addEventListener("click", (ev) => {
+    const caja = ev.target.closest(".filtro");
+    if (!caja) return;
+    const k = caja.dataset.k;
+    if (ev.target.closest(".filtro > .btn")) { filtro.abierto === k ? cerrarFiltro() : abrirFiltro(k); return; }
+    const acc = ev.target.closest("[data-acc]");
+    if (!acc) return;
+    const f = FILTROS_LISTA.find((x) => x.k === k);
+    if (acc.dataset.acc === "nada") filtro.sel[k].forEach((s) => s.clear());
+    else opcionesFiltro(f).forEach((ops, i) => ops.forEach(([v]) => filtro.sel[k][i].add(v)));
+    dibujarLista();
+  });
+  cont.addEventListener("change", (ev) => {
+    const c = ev.target;
+    if (c.type !== "checkbox") return;
+    const k = c.closest(".filtro").dataset.k, sec = filtro.sel[k][+c.dataset.i];
+    // el valor del input es texto: se busca el valor original de la opcion
+    const v = opcionesFiltro(FILTROS_LISTA.find((x) => x.k === k))[+c.dataset.i].map((o) => o[0]).find((x) => String(x) === c.value);
+    if (c.checked) sec.add(v); else sec.delete(v);
+    if (D) dibujarLista();
+  });
+  cont.addEventListener("input", (ev) => {
+    if (ev.target.type !== "search") return;
+    const k = ev.target.closest(".filtro").dataset.k;
+    filtro.q[k] = ev.target.value;
+    pintarOpciones(k);
+  });
+  document.addEventListener("mousedown", (ev) => { if (filtro.abierto && !ev.target.closest(".filtro")) cerrarFiltro(); });
+  $("#lLimpiar").addEventListener("click", () => {
+    FILTROS_LISTA.forEach((f) => filtro.sel[f.k].forEach((s) => s.clear()));
+    filtro.q = {};
+    cerrarFiltro();
+    if (D) dibujarLista();
+  });
+}
+
+// ------------------------------------------------------------ buscador general (Ctrl+K)
+let hallados = [], elegido = 0;
+function buscarGlobal() {
+  const q = $("#q").value, r = $("#res");
+  const n = limpiarConsulta(q).replace(/^0+/, "");
+  if (!D || n.length < 3) { r.classList.remove("on"); hallados = []; return; }
+  // primero los que empiezan con el numero escrito
+  const empieza = (e) => normal(e.expediente).replace(/^0+/, "").startsWith(n);
+  hallados = D.expedientes.filter((e) => coincide(e, q)).sort((a, b) => empieza(b) - empieza(a)).slice(0, 8);
+  elegido = 0;
+  pintarResultados();
+}
+function pintarResultados() {
+  const r = $("#res");
+  r.innerHTML = hallados.length
+    ? hallados.map((e, i) => `<button data-i="${i}" class="${i === elegido ? "sel" : ""}"><b>${escapar(e.expediente.replace("-OEFA/DFAI/PAS", ""))}</b>` +
+      `<span>${escapar(e.subdireccion)} · ${escapar(hojaDe(e) ? cajaCorta(e) : "fuera del árbol (al corte)")} · ${escapar(e.administrado)}</span></button>`).join("")
+    : `<div class="vacio">Sin coincidencias entre los 408, los nuevos ni los del corte</div>`;
+  r.classList.add("on");
+}
+function elegir(e) {
+  $("#res").classList.remove("on");
+  $("#q").blur();
+  cerrarFicha();
+  cerrarPanel();
+  if (hojaDe(e)) { mostrarVista("arbol"); ubicarEnArbol(e); }
+  else abrirFicha(e);
+}
+
+function ubicarEnArbol(e) {
+  const r = $("#aResultado");
+  r.classList.remove("oculto");
+  const hoja = hojaDe(e);
+  const quien = e.grupo === "408" ? `de los 408 (ID ${e.id408})` : "nuevo no previsto";
+  const exp = escapar(e.expediente.replace("-OEFA/DFAI/PAS", ""));
+  if (!hoja) {
+    resaltado = null;
+    dibujarArbol();
+    r.innerHTML = `<span><b>${exp}</b> no está en el árbol: cumplía el criterio al corte pero no está en los 408.</span>`;
+  } else {
+    // si estaba escondido por el filtro o las casillas, se vuelve a mostrar
+    const cambios = [];
+    if (SUB !== "Todas" && e.subdireccion !== SUB) { cambiarSub("Todas"); cambios.push("se cambió el filtro a Todas"); }
+    if (e.grupo === "NUEVO" && !verNuevos) { verNuevos = true; cambios.push("se volvieron a mostrar los nuevos"); }
+    if (hoja === "conc_ot" && !verOtros) { verOtros = true; cambios.push("se volvió a mostrar «Otros»"); }
+    resaltado = { e, hoja };
+    dibujarArbol();
+    r.innerHTML = `<span><b>${exp}</b>, ${quien}, ${escapar(e.subdireccion)}, está en <span class="camino">${escapar(caminoTexto(e))}</span>` +
+      (e.grupo === "NUEVO" ? " (etiqueta +n)" : "") + "</span>" + (cambios.length ? ` <span class="nota">(${cambios.join("; ")})</span>` : "");
+  }
+  r.innerHTML += ` <span class="der"><button class="btn chico" id="aFicha">Ver ficha</button><button class="btn chico" id="aQuitar">Quitar</button></span>`;
+  $("#aFicha").addEventListener("click", () => abrirFicha(e));
+  $("#aQuitar").addEventListener("click", () => { resaltado = null; r.classList.add("oculto"); dibujarArbol(); });
+  $("#svgArbol").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function escapar(v) {
+  return String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// ------------------------------------------------------------ notas
+function dibujarNotas() {
+  const n = $("#notas");
+  const alCorte = universo("AL_CORTE");
+  const priorizados = universo("408").concat(universo("NUEVO"));
+  const conSiged = priorizados.filter((e) => e.siged && e.siged.length);
+  const sinSentido = priorizados.filter((e) => e.siged_nota);
+  const fuentes = Object.entries(D.fuentes_programacion || {}).map(([mes, f]) =>
+    `<li><b>${mes}:</b> ${Object.entries(f).map(([s, a]) => `${s}: ${escapar(a)}`).join(" · ") || "sin archivos"}</li>`).join("");
+  n.innerHTML = `
+    <h3>Cómo se arma</h3>
+    <ul>
+      <li><b>Estado:</b> columna "Estado" del stock INAF (${escapar(D.archivo_stock)}), agrupada según <code>config.json</code>.</li>
+      <li><b>Fecha de riesgo:</b> la más temprana entre prescripción y caducidad.</li>
+      <li><b>Nuevos no previstos:</b> pendientes con fecha de riesgo entre ${fmt(D.corte_lista)} y ${fmt(D.riesgo_hasta)} que no están en los 408 y que no cumplían ese criterio en el primer stock del corte. Una vez detectado, un nuevo se sigue aunque luego se concluya. Historial: ${D.stocks_en_historial} stocks (uno por día).</li>
+      ${D.corte_867 ? `<li><b>Nuevos no previstos del árbol de 867:</b> pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} que no cumplían ese criterio en el stock del ${fmt(D.corte_867)}, con el que se armó la lista. No cuentan los de la lista (tampoco por su informe de supervisión, para las filas sin expediente) ni los que ya sigue el árbol de 408.</li>` : ""}
+      <li><b>Programado:</b> en la programación de ${D.mes_programacion} tiene, sin cancelar, el producto que le toca: RSD si está en análisis de inicio, IFI si está iniciado, RD si ya tiene IFI o si tiene nulidad (en la programación de DFAI cuentan como RD los productos RD-* y NULIDAD).</li>
+      <li><b>PAS con nulidad:</b> rama propia porque la base no dice si la nulidad es de la responsabilidad (puede prescribir) o solo de la multa (ya no prescribe). Por eso se mantiene en el criterio de riesgo.</li>
+    </ul>
+    <h3>Programaciones leídas</h3><ul>${fuentes}</ul>
+    <h3>Estado con SIGED (${conSiged.length} avanzan, ${sinSentido.length} RSD sin sentido)</h3>
+    <p>Con «INAF + SIGED» el estado de INAF avanza con los documentos firmados en SIGED (estado A y firma de quien corresponde en el área: ${escapar(Object.entries(D.firmantes_siged || {}).map(([a, f]) => a + " " + f.join("/")).join(", ") || "según config.json")}) creados después de que el expediente entró a su caja actual. RSD firmada: pasa a iniciado o a no inicio según la programación; si no se sabe el sentido, no se mueve. IFI firmado: pasa a iniciado con IFI. RD firmada: pasa a concluido. La línea de tiempo usa solo INAF. Reportes SIGED al ${fmt(D.siged_corte)}.
+      <button class="btn" id="verSiged">Ver los que avanzan</button> <button class="btn" id="verSinSentido">Ver RSD sin sentido</button></p>
+    <h3>Al corte, fuera de los 408 (${alCorte.length})</h3>
+    <p>Cumplían el criterio en el primer stock del corte pero no están en la lista; no se cuentan como nuevos.
+      <button class="btn" id="verAlCorte">Ver expedientes</button></p>
+    ${notas867()}
+    <h3>Avisos (${D.avisos.length})</h3>
+    <ul>${D.avisos.map((a) => `<li>${escapar(a)}</li>`).join("") || "<li>Sin avisos.</li>"}</ul>`;
+  $("#verAlCorte").addEventListener("click", () => abrirTabla("Al corte, fuera de los 408", alCorte));
+  const n867 = notas867.listas;
+  if (n867) {
+    $("#verSiged867").addEventListener("click", () => abrirTabla("867 · avanzan con documentos firmados en SIGED", n867.conSiged));
+    $("#verSinSentido867").addEventListener("click", () => abrirTabla("867 · RSD firmada en SIGED sin sentido confirmado", n867.sinSentido));
+    $("#verSinExp867").addEventListener("click", () => abrirTabla("867 · filas sin expediente", n867.sinExp));
+    $("#verEn408").addEventListener("click", () => abrirTabla("867 · también en los 408", n867.en408));
+    $("#verAlCorte867").addEventListener("click", () => abrirTabla("Al corte, fuera de los 867", n867.alCorte));
+  }
+  $("#verSiged").addEventListener("click", () => abrirTabla("Avanzan con documentos firmados en SIGED", conSiged));
+  $("#verSinSentido").addEventListener("click", () => abrirTabla("RSD firmada en SIGED sin sentido confirmado", sinSentido));
+}
+
+// seccion de Notas sobre el arbol de 867; deja sus listas en notas867.listas para los botones
+function notas867() {
+  notas867.listas = null;
+  if (!D.expedientes_867 || !D.expedientes_867.length) return "";
+  const l = universo("867"), nue = universo("NUEVO867"), alCorte = universo("AL_CORTE867"), todos = l.concat(nue);
+  const L = notas867.listas = {
+    conSiged: todos.filter((e) => e.siged && e.siged.length), sinSentido: todos.filter((e) => e.siged_nota),
+    sinExp: l.filter((e) => e.expediente.startsWith("Sin expediente")), en408: l.filter((e) => e.en_408), alCorte,
+  };
+  const equipos = EQUIPOS.map(([c, t]) => `${l.filter((e) => e.equipo === c).length} del ${t}`).join(" y ");
+  const sub = SUB === "Todas" ? "" : ` (solo ${SUB})`;
+  return `
+    <h3>Árbol de 867${sub}</h3>
+    <ul>
+      <li><b>Lista:</b> ${l.length} expedientes (${equipos}), cruzados con el stock INAF por expediente. ${L.en408.length} también están en los 408. <button class="btn chico" id="verEn408">Ver</button></li>
+      <li><b>Filas sin expediente (${L.sinExp.length}):</b> se busca su informe de supervisión en el stock; si no está, cuentan con la etapa más reciente que trae la lista y no entran a la curva diaria. <button class="btn chico" id="verSinExp867">Ver</button></li>
+      <li><b>Nuevos no previstos:</b> ${nue.length}${D.corte_867 ? `, pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} detectados después del stock del ${fmt(D.corte_867)}` : ""}.</li>
+      <li><b>Estado con SIGED:</b> ${L.conSiged.length} avanzan y ${L.sinSentido.length} tienen una RSD sin sentido confirmado (lista y nuevos, misma regla que en los 408).
+        <button class="btn chico" id="verSiged867">Ver los que avanzan</button> <button class="btn chico" id="verSinSentido867">Ver RSD sin sentido</button></li>
+      <li><b>Al corte, fuera de los 867 (${alCorte.length}):</b> cumplían el criterio en el stock del ${fmt(D.corte_867)} pero no están en la lista; no se cuentan como nuevos. <button class="btn chico" id="verAlCorte867">Ver expedientes</button></li>
+    </ul>`;
+}
+
+// ------------------------------------------------------------ pestana Riesgo
+const ETAPAS = ["EAI", "INI", "IFI", "NUL"];
+const ETAPA_TXT = { EAI: "En análisis de inicio", INI: "Iniciados", IFI: "Iniciados con IFI", NUL: "PAS con nulidad" };
+const ETAPA_COLOR = { EAI: "#2a78d6", INI: "#eb6834", IFI: "#1baf7a", NUL: "#eda100" };
+const SEM_TXT = { venc: "Vencida", rojo: "Rojo", ambar: "Ámbar", verde: "Verde", sin: "Sin fecha" };
+const SEM_COLOR = { venc: "#d03b3b", rojo: "#d03b3b", ambar: "#fab219", verde: "#0ca30c", sin: "#a1a1aa" };
+const DIA = 86400000;
+const diaDe = (isoTxt) => Date.UTC(+isoTxt.slice(0, 4), +isoTxt.slice(5, 7) - 1, +isoTxt.slice(8, 10));
+const ddmm = (t) => { const d = new Date(t); return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+
+// fecha limite: la mas proxima entre prescripcion y caducidad tal como estan en INAF, sin regla por etapa
+// (un iniciado tambien puede prescribir si la suspension del plazo no alcanza)
+function calcularLimites() {
+  const hoy = diaDe(D.corte_stock);
+  for (const e of todosExp()) {
+    let f = "", t = "";
+    if (PEND.includes(e.categoria)) { f = e.riesgo; t = (e.tipo_riesgo || "").toLowerCase(); }
+    e.limite = f || "";
+    e.tipo_limite = PEND.includes(e.categoria) ? (f ? t : "sin fecha en INAF") : "";
+    e.dias_limite = f ? Math.round((diaDe(f) - hoy) / DIA) : null;
+  }
+}
+
+function semaforo(e) {
+  const [r, a] = D.semaforo_dias || [30, 60], d = e.dias_limite;
+  if (d === null || d === undefined) return "sin";
+  return d < 0 ? "venc" : d <= r ? "rojo" : d <= a ? "ambar" : "verde";
+}
+
+function pendRiesgo(R) {
+  const g = rid(R, "rNuevos").checked ? [R.grupo, R.nuevo] : [R.grupo];
+  return g.flatMap(universo).filter((e) => PEND.includes(e.categoria));
+}
+
+const COLS_ALERTA = [
+  COLS[0], COLS[1], COLS[2], COLS[3],
+  ["jefe", "Jefe de equipo", (e) => e.jefe],
+  ["administrado", "Administrado", (e) => e.administrado],
+  ["categoria", "Etapa", (e) => NOMBRE_NODO[e.categoria]],
+  ["limite", "Fecha límite", (e) => e.limite ? `${fmt(e.limite)} · ${e.tipo_limite}` : e.tipo_limite],
+  ["dias_limite", "Días", (e) => e.dias_limite ?? "", "num"],
+  ["programado", "Programado", null],
+  ["programacion", "Programación del mes", (e) => e.programacion.join(" | ")],
+];
+// las dos pestanas de riesgo son iguales: cada una con su grupo, su serie diaria, su ventana y sus controles
+const RIESGO_408 = {
+  suf: "", grupo: "408", nuevo: "NUEVO", serie: () => D.serie, desde: () => D.corte_lista, hasta: () => D.riesgo_hasta,
+  dias: 60, filtro: "sin", alerta: { filas: [], orden: "dias_limite", asc: true, cols: COLS_ALERTA, tabla: "#rTabla", buscar: null, info: "#rInfo" },
+};
+const RIESGO_867 = {
+  suf: "867", grupo: "867", nuevo: "NUEVO867", serie: () => D.serie_867, desde: () => D.corte_867, hasta: () => D.riesgo_867_hasta,
+  dias: 60, filtro: "sin", alerta: { filas: [], orden: "dias_limite", asc: true, cols: COLS_ALERTA, tabla: "#rTabla867", buscar: null, info: "#rInfo867" },
+};
+const rid = (R, id) => $("#" + id + R.suf);
+
+function dibujarRiesgo(R = RIESGO_408) {
+  const P = pendRiesgo(R), alerta = R.alerta;
+  const [r, a] = D.semaforo_dias || [30, 60];
+  const vencidas = P.filter((e) => semaforo(e) === "venc").length;
+  const sinFecha = P.filter((e) => semaforo(e) === "sin").length;
+
+  // lista de alerta
+  const enPlazo = P.filter((e) => e.dias_limite !== null && e.dias_limite <= R.dias);
+  // con estado INAF, un documento ya firmado en SIGED es una accion en curso; con INAF + SIGED ya movio la caja
+  const sinAccion = (e) => !e.programado && !(MODO === "inaf" && e.siged && e.siged.length);
+  alerta.filas = R.filtro === "sin" ? enPlazo.filter(sinAccion) : enPlazo;
+  pintarTabla(alerta);
+  rid(R, "rExpl").textContent = `Pendientes cuya fecha límite llega en los próximos ${R.dias} días (o ya pasó)` +
+    (R.filtro === "sin" ? `, sin el producto que les toca en la programación de ${D.mes_programacion}` + (MODO === "inaf" ? " y sin documento firmado en SIGED" : "") : "") +
+    `. ${enPlazo.length} vencen en ese plazo; ${enPlazo.filter(sinAccion).length} no tienen nada en marcha.` +
+    (sinFecha ? ` ${sinFecha === 1 ? "1 pendiente no tiene" : sinFecha + " pendientes no tienen"} fecha límite en INAF y no entra${sinFecha === 1 ? "" : "n"} en esta lista (ver la columna «Sin fecha» del calendario).` : "");
+
+  // calendario: etapa x tramo de dias
+  const tramos = [
+    ["venc", "Vencida", (d) => d < 0],
+    ["rojo", `0 a ${r} días`, (d) => d >= 0 && d <= r],
+    ["ambar", `${r + 1} a ${a} días`, (d) => d > r && d <= a],
+    ["verde", `${a + 1} a 90 días`, (d) => d > a && d <= 90],
+    ["verde", "91 a 180 días", (d) => d > 90 && d <= 180],
+    ["verde", "Más de 180", (d) => d > 180],
+    ["sin", "Sin fecha", null],
+  ];
+  const enTramo = (e, t) => t[2] ? e.dias_limite !== null && t[2](e.dias_limite) : e.dias_limite === null;
+  const celdas = [];
+  const celda = (filas, titulo, sem) => {
+    const i = celdas.push({ filas, titulo }) - 1;
+    const n4 = filas.filter((e) => e.grupo === R.grupo).length, nn = filas.length - n4;
+    if (!filas.length) return `<td style="color:#d4d4d8">·</td>`;
+    const fondo = sem ? `background:color-mix(in srgb, ${SEM_COLOR[sem]} ${sem === "sin" ? 10 : 16}%, white)` : "";
+    return `<td class="c" data-c="${i}" style="${fondo}">${n4}${nn ? `<span class="nue" title="nuevos no previstos">+${nn}</span>` : ""}</td>`;
+  };
+  const cab = tramos.map(([s, t]) => `<th><span class="sem"><i style="background:${SEM_COLOR[s]}"></i>${t}</span></th>`).join("");
+  const filasM = ETAPAS.map((c) => {
+    const de = P.filter((e) => e.categoria === c);
+    return `<tr><td><span class="clave" style="margin:0;color:inherit;font-size:13px"><i style="background:${ETAPA_COLOR[c]}"></i>${ETAPA_TXT[c]}</span></td>` +
+      tramos.map((t) => celda(de.filter((e) => enTramo(e, t)), `${ETAPA_TXT[c]} · ${t[1]}`, t[0])).join("") +
+      celda(de, ETAPA_TXT[c], null) + "</tr>";
+  }).join("");
+  const total = `<tr class="tot"><td>Total pendientes</td>` + tramos.map((t) => celda(P.filter((e) => enTramo(e, t)), `Pendientes · ${t[1]}`, null)).join("") + celda(P, "Pendientes", null) + "</tr>";
+  rid(R, "matriz").innerHTML = `<table class="matriz"><thead><tr><th>Etapa</th>${cab}<th>Total</th></tr></thead><tbody>${filasM}${total}</tbody></table>`;
+  rid(R, "matriz").querySelectorAll("td[data-c]").forEach((td) => td.addEventListener("click", () => {
+    const c = celdas[+td.dataset.c];
+    abrirTabla("Vencimientos › " + c.titulo, c.filas);
+  }));
+  rid(R, "cExpl").textContent = `Días desde el stock del ${fmt(D.corte_stock)} hasta la fecha límite. Rojo: ${r} días o menos; ámbar: hasta ${a}; verde: más de ${a}. ` +
+    (vencidas === 1 ? "1 pendiente ya pasó su fecha límite. " : vencidas ? `${vencidas} pendientes ya pasaron su fecha límite. ` : "Ningún pendiente pasó su fecha límite. ") +
+    `El número gris (+n) son nuevos no previstos. Clic en una celda para ver los expedientes.`;
+
+  dibujarSemanas(P, R);
+  dibujarCurva(R);
+}
+
+// graficos de la pestana Riesgo (ECharts): barras por semana y curva diaria
+const GRAF = {};
+function grafico(id) {
+  if (!GRAF[id]) {
+    GRAF[id] = echarts.init(document.getElementById(id), null, { renderer: "canvas" });
+  }
+  return GRAF[id];
+}
+// un grafico dibujado con su pestana escondida queda con ancho cero
+function ajustarGraficos() { Object.values(GRAF).forEach((g) => g.resize()); }
+const LETRA = { fontFamily: "Segoe UI, sans-serif", color: "#52525b", fontSize: 11.5 };
+const TIP = {
+  backgroundColor: "#fff", borderColor: "#e4e4e7", borderWidth: 1, padding: [6, 9],
+  textStyle: { color: "#18181b", fontSize: 12.5, fontFamily: "Segoe UI, sans-serif" },
+  extraCssText: "box-shadow: 0 4px 14px rgba(0,0,0,.12); border-radius: 8px;",
+};
+const filaTip = (col, txt, v, linea) => `<div style="display:flex;align-items:center;gap:6px"><b style="min-width:26px;text-align:right;font-variant-numeric:tabular-nums">${v}</b>` +
+  `<i style="width:12px;height:${linea ? 2 : 10}px;border-radius:2px;display:inline-block;background:${col}"></i><span>${escapar(txt)}</span></div>`;
+
+function dibujarSemanas(P, R) {
+  const N = 13, hoy = diaDe(D.corte_stock);
+  const [r, a] = D.semaforo_dias || [30, 60];
+  const semanas = [];
+  for (let i = 0; i < N; i++) {
+    const filas = P.filter((e) => e.dias_limite !== null && e.dias_limite >= 7 * i && e.dias_limite <= 7 * i + 6);
+    // franja del semaforo segun el primer dia de la semana
+    const sem = 7 * i <= r ? "rojo" : 7 * i <= a ? "ambar" : "verde";
+    semanas.push({ desde: hoy + 7 * i * DIA, hasta: hoy + (7 * i + 6) * DIA, filas, sem });
+  }
+  const g = grafico("gSemanas" + R.suf);
+  const series = ETAPAS.map((c) => ({
+    name: ETAPA_TXT[c], type: "bar", stack: "s", barWidth: "70%", itemStyle: { color: ETAPA_COLOR[c], borderRadius: 2 },
+    emphasis: { focus: "series" },
+    data: semanas.map((s) => s.filas.filter((e) => e.categoria === c).length || null),
+  }));
+  // serie vacia encima de la pila, solo para escribir el total
+  series.push({
+    name: "Total", type: "bar", stack: "s", data: semanas.map(() => 0), silent: true, itemStyle: { color: "transparent" },
+    label: { show: true, position: "top", fontWeight: 600, color: "#18181b", fontSize: 12,
+      formatter: (p) => semanas[p.dataIndex].filas.length || "" },
+  });
+  g.setOption({
+    animationDuration: 300,
+    textStyle: LETRA,
+    grid: { left: 40, right: 12, top: 44, bottom: 44 },
+    legend: { top: 0, left: 0, itemWidth: 14, itemHeight: 10, textStyle: LETRA, data: ETAPAS.map((c) => ETAPA_TXT[c]) },
+    tooltip: { ...TIP, trigger: "axis", axisPointer: { type: "shadow" },
+      formatter: (ps) => {
+        const s = semanas[ps[0].dataIndex];
+        return `<div style="color:#52525b;margin-bottom:3px">Semana del ${ddmm(s.desde)} al ${ddmm(s.hasta)}</div>` +
+          ETAPAS.map((c) => filaTip(ETAPA_COLOR[c], ETAPA_TXT[c], s.filas.filter((e) => e.categoria === c).length)).join("") +
+          filaTip("#18181b", "Total", s.filas.length);
+      } },
+    xAxis: { type: "category", data: semanas.map((s, i) => i), axisTick: { show: false }, axisLine: { lineStyle: { color: "#a1a1aa" } },
+      axisLabel: { interval: 0, lineHeight: 15, formatter: (v) => `{${semanas[v].sem}|▬▬▬}\n${ddmm(semanas[v].desde)}`,
+        rich: { rojo: { color: SEM_COLOR.rojo }, ambar: { color: SEM_COLOR.ambar }, verde: { color: SEM_COLOR.verde } } } },
+    yAxis: { type: "value", minInterval: 1, splitLine: { lineStyle: { color: "#f0f0f2" } } },
+    series,
+  }, true);
+  const abrir = (i) => {
+    const s = semanas[i];
+    if (s && s.filas.length) abrirTabla(`Vencen la semana del ${ddmm(s.desde)} al ${ddmm(s.hasta)}`, s.filas);
+  };
+  g.off("click");
+  g.on("click", (p) => abrir(p.dataIndex));
+  // tambien se abre al hacer clic en la columna, no solo sobre la barra
+  // (se quita solo el escucha anterior: ECharts tiene el suyo en el mismo evento)
+  if (g.zonaClic) g.getZr().off("click", g.zonaClic);
+  g.zonaClic = (ev) => {
+    if (ev.target) return;
+    const x = g.convertFromPixel({ seriesIndex: 0 }, [ev.offsetX, ev.offsetY]);
+    if (x) abrir(x[0]);
+  };
+  g.getZr().on("click", g.zonaClic);
+  const n13 = semanas.reduce((t, s) => t + s.filas.length, 0);
+  rid(R, "sExpl").textContent = `${n13} pendientes llegan a su fecha límite en las próximas ${N} semanas (desde el stock). La franja de color bajo cada barra es el semáforo. Clic en una barra para ver los expedientes; clic en la leyenda para esconder una etapa.`;
+}
+
+function dibujarCurva(R) {
+  const conN = rid(R, "rNuevos").checked;
+  const subs = SUB === "Todas" ? D.linea.subdirecciones : [SUB];
+  const t0 = diaDe(R.desde()), t1 = diaDe(R.hasta()), hoy = diaDe(D.corte_stock);
+  const val = (foto, c) => subs.reduce((s, sb) => s + ((foto.cuenta[sb] && foto.cuenta[sb][c]) ? foto.cuenta[sb][c][0] + (conN ? foto.cuenta[sb][c][1] : 0) : 0), 0);
+  // desde el corte del grupo (el historial de los 867 empieza antes que su lista)
+  const serie = (R.serie() || []).filter((f) => diaDe(f.fecha) >= t0).map((f) => {
+    const v = { t: diaDe(f.fecha) };
+    ETAPAS.forEach((c) => { v[c] = val(f, c); });
+    v.TOT = ETAPAS.reduce((s, c) => s + v[c], 0);
+    return v;
+  });
+  const lineas = [["TOT", "#18181b", "Total pendientes"], ...ETAPAS.map((c) => [c, ETAPA_COLOR[c], ETAPA_TXT[c]])]
+    .filter(([k]) => k !== "NUL" || serie.some((s) => s.NUL));
+  const series = lineas.map(([k, col, txt]) => ({
+    name: txt, type: "line", showSymbol: false, symbolSize: 6, lineStyle: { width: 2, color: col }, itemStyle: { color: col },
+    emphasis: { focus: "series" },
+    data: serie.map((s) => [s.t, s[k]]),
+    endLabel: { show: true, formatter: (p) => `${p.value[1]} ${txt}`, fontWeight: 600, color: "#18181b", fontSize: 12.5,
+      textBorderColor: "#fff", textBorderWidth: 3 },
+    labelLayout: { moveOverlap: "shiftY" },
+  }));
+  // marca vertical en la fecha del stock
+  series[0].markLine = { silent: true, symbol: "none", lineStyle: { color: "#a1a1aa", type: [3, 3], width: 1 },
+    label: { formatter: "stock " + ddmm(hoy), position: "insideEndTop", color: "#52525b", fontSize: 11.5 },
+    data: [{ xAxis: hoy }] };
+  const g = grafico("gCurva" + R.suf);
+  g.setOption({
+    animationDuration: 300,
+    textStyle: LETRA,
+    grid: { left: 48, right: 170, top: 44, bottom: 78 },
+    legend: { top: 0, left: 0, itemWidth: 18, itemHeight: 8, textStyle: LETRA },
+    tooltip: { ...TIP, trigger: "axis",
+      formatter: (ps) => {
+        const t = ps[0].value[0];
+        const real = serie.find((s) => s.t === t);
+        return `<div style="color:#52525b;margin-bottom:3px">${fmt(new Date(t).toISOString())}${real ? "" : " (sin stock ese día)"}</div>` +
+          (real ? lineas.map(([k, col, txt]) => filaTip(col, txt, real[k], true)).join("") : "");
+      } },
+    xAxis: { type: "time", min: t0, max: t1, axisLine: { lineStyle: { color: "#a1a1aa" } }, splitLine: { show: false },
+      axisLabel: { formatter: (v) => { const d = new Date(v); return d.getUTCDate() === 1 ? `${MESES_TXT[d.getUTCMonth()]} ${d.getUTCFullYear()}` : `${d.getUTCDate()}/${d.getUTCMonth() + 1}`; } } },
+    yAxis: { type: "value", minInterval: 1, splitLine: { lineStyle: { color: "#f0f0f2" } } },
+    dataZoom: [
+      { type: "inside", filterMode: "none" },
+      { type: "slider", filterMode: "none", height: 22, bottom: 14, borderColor: "#e4e4e7", labelFormatter: (v) => ddmm(v),
+        textStyle: LETRA, fillerColor: "rgba(24,24,27,.06)", handleStyle: { color: "#fff", borderColor: "#a1a1aa" } },
+    ],
+    series,
+  }, true);
+
+  rid(R, "kExpl").textContent = `Pendientes de cada etapa en el último stock de cada día desde el ${fmt(R.desde())} (solo INAF; no incluye lo firmado en SIGED). ` +
+    `Rueda del mouse o la barra de abajo para acercar un tramo; clic en la leyenda para esconder una línea.`;
+}
+const MESES_TXT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"];
+
+
+// ------------------------------------------------------------ general
+function pintarTodo() {
+  const movidos = D.expedientes.filter((e) => e.grupo !== "AL_CORTE" && e.siged && e.siged.length).length;
+  // punto verde si el stock es de hoy; ambar si es de otro dia
+  const h = new Date(), hoy = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}-${String(h.getDate()).padStart(2, "0")}`;
+  $("#dato").className = "datos-al " + (D.corte_stock.slice(0, 10) === hoy ? "fresco" : "viejo");
+  $("#meta").textContent = `Datos al ${fmt(D.corte_stock).slice(0, 5)} ${D.corte_stock.slice(11, 16)}` +
+    (MODO === "siged" ? ` · con SIGED (${movidos} avanzan)` : "");
+  $("#dato").title = `Stock INAF al ${fmt(D.corte_stock)} ${D.corte_stock.slice(11, 16)} (${D.archivo_stock})\nProgramación ${D.mes_programacion}\n` +
+    `SIGED al ${fmt(D.siged_corte)} ${(D.siged_corte || "").slice(11, 16)}\nRiesgo hasta ${fmt(D.riesgo_hasta)}`;
+  $("#nAvisos").textContent = D.avisos.length ? D.avisos.length : "";
+  if (resaltado) {
+    // tras actualizar las bases, el expediente buscado puede haber cambiado de caja
+    const e = D.expedientes.find((x) => x.expediente === resaltado.e.expediente);
+    resaltado = e && hojaDe(e) ? { e, hoja: hojaDe(e) } : null;
+  }
+  if (resaltado867) {
+    const e = (D.expedientes_867 || []).find((x) => x.expediente === resaltado867.e.expediente);
+    resaltado867 = e ? { e, hoja: hojaDe(e) } : null;
+    if (!resaltado867) $("#aResultado867").classList.add("oculto");
+  }
+  dibujarKpis();
+  dibujarArbol();
+  dibujarKpis(ARBOL_867);
+  dibujarArbol(ARBOL_867);
+  dibujarResumen867();
+  dibujarResumen();
+  dibujarLineas();
+  dibujarNotas();
+  dibujarLista();
+  dibujarRiesgo();
+  dibujarRiesgo(RIESGO_867);
+}
+
+// cifras clave sobre el arbol; el cambio en 7 dias sale de la serie diaria (solo INAF)
+function dibujarKpis(A = ARBOL_408) {
+  const l = universo(A.grupo), nue = universo(A.nuevo), t = l.length;
+  const conc = l.filter(NODOS.conc.f).length, pend = t - conc;
+  const evit = conc + l.filter((e) => e.categoria === "INI" || e.categoria === "IFI").length;
+  const subs = SUB === "Todas" ? D.linea.subdirecciones : [SUB];
+  const val = (f, cats) => subs.reduce((s, x) => s + cats.reduce((a, c) => a + (f.cuenta[x] && f.cuenta[x][c] ? f.cuenta[x][c][0] : 0), 0), 0);
+  const S = A.serie() || [];
+  let cambio = () => "";
+  if (S.length > 1) {
+    const u = S[S.length - 1], lim = diaDe(u.fecha) - 7 * DIA;
+    const ant = [...S].reverse().find((f) => diaDe(f.fecha) <= lim) || S[0];
+    const vs = `desde el ${fmt(ant.fecha).slice(0, 5)}`;
+    cambio = (cats, subirEsBueno) => {
+      const d = val(u, cats) - val(ant, cats);
+      if (!d) return `<span class="d">sin cambio</span> ${vs}`;
+      return `<span class="d ${(d > 0) === subirEsBueno ? "bien" : "mal"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}</span> ${vs}`;
+    };
+  }
+  const CONC = ["RD", "NI", "OTRO"];
+  $(A.kpis).innerHTML = `
+    <div class="kpi"><div class="l">${A.raiz}${SUB === "Todas" ? "" : " · " + SUB}</div><div class="v">${t}</div>
+      <div class="s"><span class="pill">+${nue.length}</span> nuevos no previstos</div>
+      <div class="b" title="Concluidos y pendientes por etapa">${barraKpi([["#1d6b35", conc], ...ETAPAS.map((c) => [ETAPA_COLOR[c], l.filter((e) => e.categoria === c).length])], t)}</div></div>
+    <div class="kpi"><div class="l">Prescripción evitada</div><div class="v">${evit}<small>${pctTxt(evit, t)}</small></div>
+      <div class="s">${cambio([...CONC, "INI", "IFI"], true)}</div><div class="b">${barraKpi([["#1d6b35", evit]], t)}</div></div>
+    <div class="kpi"><div class="l">Concluidos</div><div class="v">${conc}<small>${pctTxt(conc, t)}</small></div>
+      <div class="s">${cambio(CONC, true)}</div><div class="b">${barraKpi([["#1d6b35", conc]], t)}</div></div>
+    <div class="kpi"><div class="l">Pendientes</div><div class="v">${pend}<small>${pctTxt(pend, t)}</small></div>
+      <div class="s">${cambio(PEND, false)}</div><div class="b">${barraKpi(ETAPAS.map((c) => [ETAPA_COLOR[c], l.filter((e) => e.categoria === c).length]), t)}</div></div>`;
+}
+const barraKpi = (partes, t) => partes.filter(([, n]) => n > 0).map(([c, n]) => `<i style="width:${(n * 100) / t}%;background:${c}"></i>`).join("");
+
+// texto por equipo bajo el arbol de 867; sigue el filtro de subdireccion y el selector INAF / INAF + SIGED
+const EQUIPOS = [["EQUIPO REGULAR", "equipo regular"], ["EQUIPO ADICIONAL", "equipo adicional"]];
+function dibujarResumen867() {
+  const l = universo("867");
+  const parrafos = EQUIPOS.map(([cod, txt]) => {
+    const de = (f) => l.filter((e) => e.equipo === cod && f(e)).length;
+    return `<p>En el ${txt} hay ${de(() => true)} expedientes.<br>${de((e) => e.categoria === "EAI")} en análisis de inicio<br>` +
+      `${de((e) => ["INI", "IFI", "NUL"].includes(e.categoria))} iniciados<br>${de(NODOS.conc.f)} concluidos</p>`;
+  });
+  const sinEquipo = l.filter((e) => !EQUIPOS.some(([c]) => c === e.equipo)).length;
+  $("#resumen867").innerHTML = parrafos.join("") +
+    `<div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "siged" ? ` + documentos firmados en SIGED al ${fmt(D.siged_corte)}` : ""})${SUB === "Todas" ? "" : `, solo ${SUB}`}. ` +
+    `Iniciados = iniciados + iniciados con IFI + PAS con nulidad; concluidos = caja Concluidos (con RD, no inicio y otros). ` +
+    `No incluye los nuevos no previstos, que no tienen equipo.${sinEquipo ? ` ${sinEquipo} de los 867 no tienen equipo en la lista.` : ""}</div>`;
+}
+
+// texto para el reporte; siempre sobre los 408 de toda la DFAI, sin importar el filtro
+function dibujarResumen() {
+  const l = D.expedientes.filter((e) => e.grupo === "408");
+  const total = l.length;
+  const concluidos = l.filter(NODOS.conc.f).length;
+  const evitados = concluidos + l.filter((e) => e.categoria === "INI" || e.categoria === "IFI").length;
+  const pct = (n) => total ? (n * 100 / total).toFixed(1) + "%" : "";
+  $("#resumen").innerHTML = `
+    <p>A finales de agosto de 2026 se identificaron ${total} expedientes con riesgo de prescripción y caducidad. Son casos en los que, si no se actúa a tiempo, se pierde la posibilidad de sancionar. (DFAI)</p>
+    <p>Por ello, desde setiembre de 2026 la DFAI atiende con prioridad estos expedientes en riesgo de prescripción. A la fecha, ya se evitó la prescripción de ${evitados} de ellos (${pct(evitados)}) con la emisión de la resolución subdirectoral que inicia el PAS. Además, ${concluidos} expedientes (${pct(concluidos)}) ya concluyeron su tramitación del procedimiento administrativo sancionador. Es decir, la atención prioritaria ya está dando resultados en la DFAI.</p>
+    <div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "siged" ? ` + documentos firmados en SIGED al ${fmt(D.siged_corte)}` : ""}). Prescripción evitada = concluidos + iniciados + iniciados con IFI; concluidos = caja Concluidos.${SUB === "Todas" ? "" : ` Son cifras de toda la DFAI, no solo de ${SUB}.`}</div>`;
+}
+
+async function copiarResumen(sel = "#resumen") {
+  const t = [...document.querySelectorAll(sel + " p")].map((p) => p.innerText.trim()).join("\n\n");
+  try {
+    await navigator.clipboard.writeText(t);
+  } catch {
+    const a = document.createElement("textarea");
+    a.value = t;
+    document.body.appendChild(a);
+    a.select();
+    document.execCommand("copy");
+    a.remove();
+  }
+  aviso("Texto copiado.", 2000);
+}
+
+function cambiarSub(s) {
+  SUB = s;
+  document.querySelectorAll("#filtroSub button").forEach((b) => b.classList.toggle("on", b.dataset.s === s));
+  if (D) pintarTodo();
+}
+
+function mostrarVista(vista) {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x.dataset.vista === vista));
+  ["arbol", "arbol867", "linea", "riesgo", "riesgo867", "lista", "notas"].forEach((v) => $("#v-" + v).classList.toggle("oculto", v !== vista));
+  if (vista.startsWith("riesgo")) ajustarGraficos();
+}
+
+function aviso(txt, ms) {
+  const e = $("#estado");
+  e.textContent = txt;
+  e.classList.remove("oculto");
+  clearTimeout(aviso.t);
+  if (ms) aviso.t = setTimeout(() => e.classList.add("oculto"), ms);
+}
+
+// avance que manda el motor mientras actualiza: texto y, al leer el historial, una barra
+function progreso(p) {
+  aviso(p.texto);
+  if (p.total) {
+    const b = document.createElement("div");
+    b.className = "barra-avance";
+    const i = document.createElement("i");
+    i.style.width = Math.round((p.actual * 100) / p.total) + "%";
+    b.appendChild(i);
+    $("#estado").appendChild(b);
+  }
+}
+
+// el motor revisa las carpetas cada minuto y avisa si llego un stock, una programacion o un reporte SIGED nuevo
+function mostrarNuevas(lista) {
+  if (!lista || !lista.length) { $("#nuevas").classList.add("oculto"); return; }
+  $("#nuevasLista").textContent = lista.join(" · ");
+  $("#nuevas").classList.remove("oculto");
+}
+
+async function cargar() {
+  try {
+    if (esApp()) D = await api("datos");
+    else {
+      // en navegador: el JSON junto a la pagina o, si se abre ui/index.html, en la carpeta de arriba
+      let r = await fetch("datos_priorizados.json?" + Date.now());
+      if (!r.ok) r = await fetch("../datos_priorizados.json?" + Date.now());
+      D = await r.json();
+    }
+  } catch (err) {
+    D = null;
+  }
+  if (!D) {
+    $("#meta").textContent = esApp() ? "Sin datos: pulsa «Actualizar bases»" : "Sin datos";
+    if (!esApp()) sinDatos(true);
+    return;
+  }
+  aplicarModo();
+  pintarTodo();
+}
+
+// ------------------------------------------------------------ version online (navegador)
+// La pagina publicada no trae datos: se cargan de datos_priorizados.json, el archivo que la app deja
+// junto al .exe al actualizar las bases. Se lee en memoria, sin subirlo ni guardarlo.
+function sinDatos(si) {
+  $("#vacio").classList.toggle("oculto", !si);
+  $("main").classList.toggle("oculto", si);
+}
+
+async function cargarArchivo(f) {
+  if (!f) return;
+  let d = null;
+  try { d = JSON.parse(await f.text()); } catch (err) { d = null; }
+  if (!d || !Array.isArray(d.expedientes) || !d.corte_stock) {
+    aviso(`«${f.name}» no es un datos_priorizados.json de la app.`, 7000);
+    return;
+  }
+  const antes = D;
+  try {
+    D = d;
+    aplicarModo();
+    pintarTodo();
+    sinDatos(false);
+    ajustarGraficos();
+    aviso(`Datos cargados: ${f.name}`, 3000);
+  } catch (err) {
+    // un JSON de otra version de la app puede no traer todo lo que piden las vistas
+    D = antes;
+    if (D) { aplicarModo(); pintarTodo(); } else sinDatos(true);
+    aviso(`No se pudo leer «${f.name}»: genera el archivo con la versión actual de la app.`, 9000);
+  }
+}
+
+function prepararNavegador() {
+  $("#btnDrive").classList.add("oculto");
+  $("#btnActualizar").classList.add("oculto");
+  $("#btnCargar").classList.remove("oculto");
+  $("#btnExportar").title = "Descarga en CSV los expedientes (408, nuevos y al corte)";
+  const elegir = () => $("#archivoDatos").click();
+  $("#btnCargar").addEventListener("click", elegir);
+  $("#vacioCargar").addEventListener("click", elegir);
+  $("#archivoDatos").addEventListener("change", (ev) => {
+    cargarArchivo(ev.target.files[0]);
+    ev.target.value = "";   // permite volver a elegir el mismo archivo
+  });
+  const conArchivos = (ev) => ev.dataTransfer && [...ev.dataTransfer.types].includes("Files");
+  let dentro = 0;
+  const soltar = () => { dentro = 0; document.body.classList.remove("soltando"); };
+  window.addEventListener("dragenter", (ev) => {
+    if (!conArchivos(ev)) return;
+    ev.preventDefault();
+    dentro++;
+    document.body.classList.add("soltando");
+  });
+  window.addEventListener("dragover", (ev) => { if (conArchivos(ev)) ev.preventDefault(); });
+  window.addEventListener("dragleave", () => { if (--dentro <= 0) soltar(); });
+  window.addEventListener("drop", (ev) => {
+    if (!conArchivos(ev)) return;
+    ev.preventDefault();
+    soltar();
+    cargarArchivo(ev.dataTransfer.files[0]);
+  });
+}
+
+// las vistas leen categoria / programado / producto_esperado; aqui se eligen segun el modo
+function aplicarModo() {
+  for (const e of todosExp()) {
+    if (e.categoria_inaf === undefined) {
+      e.categoria_inaf = e.categoria;
+      e.programado_inaf = e.programado;
+      e.producto_esperado_inaf = e.producto_esperado;
+    }
+    const s = MODO === "siged" && e.categoria_siged !== undefined;
+    e.categoria = s ? e.categoria_siged : e.categoria_inaf;
+    e.programado = s ? e.programado_siged : e.programado_inaf;
+    e.producto_esperado = s ? e.producto_esperado_siged : e.producto_esperado_inaf;
+  }
+  calcularLimites();
+}
+
+const movidoPorSiged = (e) => MODO === "siged" && e.siged && e.siged.length > 0;
+
+async function actualizar() {
+  if (!esApp()) { aviso("Actualizar solo funciona dentro de la app (.exe) o con motor.exe", 4000); return; }
+  const botones = [$("#btnActualizar"), $("#nuevasActualizar")];
+  botones.forEach((b) => { b.disabled = true; });
+  aviso("Leyendo bases…");
+  const t0 = performance.now();
+  try {
+    D = await api("actualizar");
+    aplicarModo();
+    pintarTodo();
+    mostrarNuevas([]);
+    aviso(`Bases actualizadas en ${((performance.now() - t0) / 1000).toFixed(1)} s.`, 3500);
+  } catch (err) {
+    aviso("Error: " + err, 9000);
+  } finally {
+    botones.forEach((b) => { b.disabled = false; });
+  }
+}
+
+const EXPORT_COLS = [
+  ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 867", "id867"], ["Equipo", "equipo"], ["Subdirección", "subdireccion"],
+  ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
+  ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
+  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
+  ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
+  ["Prescripción", "prescripcion"], ["Caducidad", "caducidad"], ["Fecha de riesgo", "riesgo"], ["Tipo de riesgo", "tipo_riesgo"],
+  ["Días al riesgo", "dias_riesgo"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"],
+  ["Programación del mes", "programacion"], ["Mes de riesgo (lista)", "mes_riesgo_lista"], ["Estado en la lista", "estado_lista"],
+  ["Detectado el", "primera_vez"],
+];
+// hoja de los 867: su numero en la lista, su estado y la caja del arbol en que esta
+const EXPORT_COLS_867 = [
+  ["N.° 867", "id867"], ["Grupo", "grupo"], ["Equipo", "equipo"], ["Expediente", "expediente"], ["También en los 408", "en_408"], ["Subdirección", "subdireccion"],
+  ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
+  ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
+  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
+  ["Caja del árbol", "_caja"], ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
+  ["Prescripción", "prescripcion"], ["Caducidad", "caducidad"], ["Fecha de riesgo", "riesgo"], ["Tipo de riesgo", "tipo_riesgo"],
+  ["Días al riesgo", "dias_riesgo"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"],
+  ["Programación del mes", "programacion"], ["Estado en la lista", "estado_lista"], ["Detectado el", "primera_vez"],
+];
+// primero la lista por su N.°, luego los nuevos no previstos
+const filas867 = () => universo("867").sort((a, b) => a.id867 - b.id867).concat(universo("NUEVO867"));
+const NOMBRE_NODO = { EAI: "En análisis de inicio", INI: "Iniciado", IFI: "Iniciado con IFI", NUL: "PAS con nulidad", RD: "Concluido con RD", NI: "Concluido con RSD no inicio", OTRO: "Otros" };
+
+// una hoja por tabla: [{ nombre, filas, cols }]; en el navegador solo sale la primera, en CSV
+async function exportar(filas, nombre, otras = [], hoja = "Expedientes", cols = EXPORT_COLS) {
+  const hojas = [{ nombre: hoja, filas, cols }, ...otras].map((h) => ({
+    nombre: h.nombre, cabecera: h.cols.map((c) => c[0]), filas: datosExport(h.filas, h.cols),
+  }));
+  if (esApp()) {
+    try {
+      const r = await api("exportar", { hojas, sugerido: nombre });
+      if (r) aviso("Guardado: " + r, 4000);
+    } catch (err) { aviso("No se pudo exportar: " + err, 8000); }
+    return;
+  }
+  const csv = [hojas[0].cabecera, ...hojas[0].filas].map((f) => f.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
+  a.download = nombre + ".csv";
+  a.click();
+}
+
+function datosExport(filas, cols) {
+  return filas.map((e) => cols.map(([, k]) => {
+    let v = e[k];
+    if (k === "categoria_inaf" || k === "categoria_siged") v = NOMBRE_NODO[v] || v;
+    if (k === "siged") v = (v || []).map((d) => `${d.tipo} ${d.numero} (${fmt(d.fecha)})`).join(" | ");
+    if (k === "programado") v = e.producto_esperado ? (v ? "SÍ" : "NO") : "";
+    if (k === "programacion") v = v.join(" | ");
+    if (k === "grupo") v = { "408": "408", NUEVO: "NUEVO", "867": "867", NUEVO867: "NUEVO 867", AL_CORTE867: "AL CORTE 867" }[v] || "AL CORTE";
+    if (k === "en_408") v = v ? "SÍ" : "NO";
+    if (k === "_caja") { const h = hojaDe(e); v = h ? caminoDe(h).slice(1).map(nombreNodo).join(" › ") : ""; }
+    return v ?? "";
+  }));
+}
+
+async function pngDeSvg(svg) {
+  const vb = svg.viewBox.baseVal, esc = 2;
+  const xml = new XMLSerializer().serializeToString(svg);
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = vb.width * esc; c.height = vb.height * esc;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/png");
+}
+
+// arbol y linea son SVG propios; los graficos de Riesgo son ECharts
+async function guardarImagen(id, nombre) {
+  const url = GRAF[id]
+    ? GRAF[id].getDataURL({ type: "png", pixelRatio: 2, backgroundColor: "#fff" })
+    : await pngDeSvg(id === "lineas" ? $("#svgLineas") : $("#" + id));
+  if (esApp()) {
+    try {
+      const r = await api("guardar_imagen", { dataUrl: url, sugerido: nombre });
+      if (r) aviso("Guardado: " + r, 4000);
+    } catch (err) { aviso("No se pudo guardar: " + err, 8000); }
+  } else {
+    const a = document.createElement("a"); a.href = url; a.download = nombre + ".png"; a.click();
+  }
+}
+
+// ------------------------------------------------------------ subir al Drive
+// Tres pestanas: el arbol de 408 y el de 867 como cuadros (caja, total, % y por subdireccion) y el
+// listado de Expedientes. Siempre de toda la DFAI y sin los filtros de la pestana Expedientes; el
+// estado sigue el selector INAF / INAF + SIGED.
+const deGrupo = (g) => (["867", "NUEVO867", "AL_CORTE867"].includes(g) ? D.expedientes_867 || [] : D.expedientes).filter((e) => e.grupo === g);
+const SUBS_DRIVE = ["SFEM", "SFAP", "SFIS"];
+const EXPORT_COLS_DRIVE = [...EXPORT_COLS, ["Caja del árbol", "_caja"]];
+const ANCHOS_ARBOL = [330, 120, 130, 140, 100, 100, 130, 100];
+
+function cuadroArbol(A, titulo) {
+  const l = deGrupo(A.grupo), nue = deGrupo(A.nuevo), t = l.length;
+  const filas = [], estilos = [];
+  const est = (f0, c0, c1, x) => estilos.push({ f0, f1: f0 + 1, c0, c1, ...x });
+  const ahora = new Date();
+  const dos = (n) => String(n).padStart(2, "0");
+  filas.push([titulo]);
+  est(0, 0, 1, { negrita: true, tam: 14 });
+  filas.push([`Datos al ${fmt(D.corte_stock)} ${D.corte_stock.slice(11, 16)} · ${MODO === "siged" ? "estado INAF + documentos firmados en SIGED" : "estado INAF"} · ` +
+    `programación ${D.mes_programacion} · subido el ${dos(ahora.getDate())}/${dos(ahora.getMonth() + 1)}/${ahora.getFullYear()} ${dos(ahora.getHours())}:${dos(ahora.getMinutes())}`]);
+  est(1, 0, 1, { color: "#71717a" });
+  filas.push([]);
+  // cifras clave
+  const conc = l.filter(NODOS.conc.f).length, pend = t - conc;
+  const evit = conc + l.filter((e) => e.categoria === "INI" || e.categoria === "IFI").length;
+  const pc = (n) => (t ? n / t : 0);
+  filas.push([A.raiz, "Nuevos no previstos", "Prescripción evitada", "%", "Concluidos", "%", "Pendientes", "%"]);
+  filas.push([t, nue.length, evit, pc(evit), conc, pc(conc), pend, pc(pend)]);
+  est(3, 0, 8, { negrita: true, fondo: "#f4f4f5" });
+  [3, 5, 7].forEach((c) => est(4, c, c + 1, { pct: true }));
+  filas.push([]);
+  // el arbol, caja por caja, con sangria segun el nivel
+  const f0 = filas.length;
+  filas.push(["Caja del árbol", "Expedientes", `% de los ${t}`, ...SUBS_DRIVE, "Nuevos no previstos"]);
+  est(f0, 0, 7, { negrita: true, fondo: "#18181b", color: "#ffffff" });
+  const recorrer = (k, nivel) => {
+    const de = l.filter(NODOS[k].f), f = filas.length;
+    filas.push(["      ".repeat(nivel) + (k === "raiz" ? A.raiz : nombreNodo(k)), de.length, pc(de.length),
+      ...SUBS_DRIVE.map((s) => de.filter((e) => e.subdireccion === s).length), nue.filter(NODOS[k].f).length]);
+    est(f, 2, 3, { pct: true });
+    if (nivel === 0) est(f, 0, 7, { negrita: true, fondo: "#f4f4f5" });
+    else if (nivel === 1) est(f, 0, 7, { negrita: true, fondo: NODOS[k].rama === "conc" ? "#f3f8f4" : null });
+    // como el punto naranja del arbol: le falta programar el producto que le toca
+    if (NODOS[k].alerta && de.length) est(f, 0, 2, { color: "#c2410c" });
+    Object.keys(LAYOUT).filter((h) => LAYOUT[h][2] === k).forEach((h) => recorrer(h, nivel + 1));
+  };
+  recorrer("raiz", 0);
+  return { filas, estilos, est };
+}
+
+function hojasDrive() {
+  const a408 = cuadroArbol(ARBOL_408, "Árbol de estados · 408 priorizados");
+  a408.filas.push([], ["Texto para el reporte"]);
+  a408.est(a408.filas.length - 1, 0, 1, { negrita: true });
+  document.querySelectorAll("#resumen p").forEach((p) => a408.filas.push([p.textContent.trim()]));
+
+  const a867 = cuadroArbol(ARBOL_867, "Árbol de estados · Priorizados 867");
+  const l867 = deGrupo("867");
+  a867.filas.push([], ["Por equipo", "Expedientes", "En análisis de inicio", "Iniciados", "Concluidos"]);
+  a867.est(a867.filas.length - 1, 0, 5, { negrita: true, fondo: "#18181b", color: "#ffffff" });
+  for (const [cod, txt] of EQUIPOS) {
+    const de = l867.filter((e) => e.equipo === cod);
+    a867.filas.push([txt[0].toUpperCase() + txt.slice(1), de.length, de.filter((e) => e.categoria === "EAI").length,
+      de.filter((e) => ["INI", "IFI", "NUL"].includes(e.categoria)).length, de.filter(NODOS.conc.f).length]);
+  }
+  a867.filas.push(["Iniciados = iniciados + iniciados con IFI + PAS con nulidad; concluidos = caja Concluidos. Sin los nuevos no previstos, que no tienen equipo."]);
+  a867.est(a867.filas.length - 1, 0, 1, { color: "#71717a" });
+
+  const lista = ["408", "NUEVO", "867", "NUEVO867"].flatMap(deGrupo);
+  const exp = [EXPORT_COLS_DRIVE.map((c) => c[0]), ...datosExport(lista, EXPORT_COLS_DRIVE)];
+  return [
+    // ancho fijo: la columna A tiene titulos y parrafos largos que no deben ensancharla
+    { nombre: "Árbol 408", filas: a408.filas, estilos: a408.estilos, anchos: ANCHOS_ARBOL },
+    { nombre: "Árbol 867", filas: a867.filas, estilos: a867.estilos, anchos: ANCHOS_ARBOL },
+    { nombre: "Expedientes", filas: exp, congelar: 1,
+      estilos: [{ f0: 0, f1: 1, c0: 0, c1: EXPORT_COLS_DRIVE.length, negrita: true, fondo: "#18181b", color: "#ffffff" }] },
+  ];
+}
+
+async function subirDrive() {
+  if (!D) return;
+  if (!esApp()) { aviso("Subir al Drive solo funciona dentro de la app (.exe)", 4000); return; }
+  const b = $("#btnDrive");
+  b.disabled = true;
+  aviso("Subiendo los cuadros a Google Sheets…");
+  try {
+    await api("subir_drive", { hojas: hojasDrive() });
+    aviso("Subido a Google Sheets: Árbol 408, Árbol 867 y Expedientes.", 5000);
+  } catch (err) {
+    aviso("No se pudo subir al Drive: " + err, 10000);
+  } finally {
+    b.disabled = false;
+  }
+}
+
+function hoyTxt() { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`; }
+
+// eventos
+$("#filtroSub").innerHTML = SUBS.map((s) => `<button data-s="${s}" class="${s === SUB ? "on" : ""}">${s}</button>`).join("");
+$("#filtroModo").addEventListener("click", (ev) => {
+  const m = ev.target.dataset.m;
+  if (!m) return;
+  MODO = m;
+  document.querySelectorAll("#filtroModo button").forEach((b) => b.classList.toggle("on", b.dataset.m === m));
+  if (D) { aplicarModo(); pintarTodo(); }
+});
+$("#filtroSub").addEventListener("click", (ev) => {
+  if (ev.target.dataset.s) cambiarSub(ev.target.dataset.s);
+});
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => mostrarVista(b.dataset.vista)));
+eventosFiltros();
+$("#lBuscar").addEventListener("input", () => D && pintarTabla(lista));
+$("#lExportar").addEventListener("click", () => D && exportar(filasVisibles(lista), "priorizados_lista_" + hoyTxt()));
+$("#conNuevos").addEventListener("change", () => D && dibujarLineas());
+$("#verNuevos").addEventListener("change", (ev) => {
+  verNuevos = ev.target.checked;
+  if (D) dibujarArbol();
+});
+$("#verOtros").addEventListener("change", (ev) => {
+  verOtros = ev.target.checked;
+  if (D) dibujarArbol();
+});
+$("#verNuevos867").addEventListener("change", (ev) => {
+  verNuevos867 = ev.target.checked;
+  if (D) dibujarArbol(ARBOL_867);
+});
+$("#copiar867").addEventListener("click", () => D && copiarResumen("#resumen867"));
+$("#verOtros867").addEventListener("change", (ev) => {
+  verOtros867 = ev.target.checked;
+  if (D) dibujarArbol(ARBOL_867);
+});
+$("#exportar867").addEventListener("click", () => D && exportar(filas867(), "originales_867_" + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], "867 originales", EXPORT_COLS_867));
+$("#copiar").addEventListener("click", () => D && copiarResumen());
+$("#q").addEventListener("input", buscarGlobal);
+$("#q").addEventListener("focus", () => hallados.length && pintarResultados());
+$("#q").addEventListener("blur", () => setTimeout(() => $("#res").classList.remove("on"), 120));
+$("#q").addEventListener("keydown", (ev) => {
+  if (!hallados.length) return;
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    elegido = (elegido + (ev.key === "ArrowDown" ? 1 : hallados.length - 1)) % hallados.length;
+    pintarResultados();
+  } else if (ev.key === "Enter") elegir(hallados[elegido]);
+});
+$("#res").addEventListener("mousedown", (ev) => {
+  const b = ev.target.closest("button[data-i]");
+  if (b) elegir(hallados[+b.dataset.i]);
+});
+$("#btnActualizar").addEventListener("click", actualizar);
+$("#btnDrive").addEventListener("click", subirDrive);
+for (const R of [RIESGO_408, RIESGO_867]) {
+  rid(R, "rNuevos").addEventListener("change", () => D && dibujarRiesgo(R));
+  rid(R, "rUmbral").addEventListener("click", (ev) => {
+    const d = ev.target.dataset.d;
+    if (!d) return;
+    R.dias = +d;
+    rid(R, "rUmbral").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.d === d));
+    if (D) dibujarRiesgo(R);
+  });
+  rid(R, "rFiltro").addEventListener("click", (ev) => {
+    const f = ev.target.dataset.f;
+    if (!f) return;
+    R.filtro = f;
+    rid(R, "rFiltro").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.f === f));
+    if (D) dibujarRiesgo(R);
+  });
+  rid(R, "rExportar").addEventListener("click", () => D && exportar(filasVisibles(R.alerta), (R.suf ? "priorizados_867_alerta_" : "priorizados_alerta_") + hoyTxt()));
+}
+$("#btnExportar").addEventListener("click", () => D && exportar(D.expedientes.filter((e) => SUB === "Todas" || e.subdireccion === SUB), "priorizados_" + hoyTxt(),
+  [{ nombre: "867 originales", filas: filas867(), cols: EXPORT_COLS_867 }]));
+$("#pExportar").addEventListener("click", () => exportar(filasVisibles(panel), "priorizados_detalle_" + hoyTxt()));
+$("#pCerrar").addEventListener("click", cerrarPanel);
+$("#velo").addEventListener("click", cerrarPanel);
+$("#velo2").addEventListener("click", cerrarFicha);
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === "k") { e.preventDefault(); $("#q").focus(); $("#q").select(); return; }
+  if (e.key !== "Escape") return;
+  if ($("#res").classList.contains("on")) { $("#res").classList.remove("on"); return; }
+  if (filtro.abierto) { cerrarFiltro(); return; }
+  // primero se cierra la ficha; si no hay ficha, el panel
+  if (!$("#ficha").classList.contains("oculto")) cerrarFicha();
+  else cerrarPanel();
+});
+$("#pBuscar").addEventListener("input", () => pintarTabla(panel));
+document.querySelectorAll("[data-imagen]").forEach((b) => b.addEventListener("click", () => {
+  if (!D) return;
+  const id = b.dataset.imagen;
+  const nombre = { lineas: "linea_tiempo_", gSemanas: "vencen_por_semana_", gCurva: "curva_avance_", svgArbol867: "arbol_867_",
+    gSemanas867: "vencen_por_semana_867_", gCurva867: "curva_avance_867_" }[id] || "arbol_priorizados_";
+  guardarImagen(id, nombre + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt());
+}));
+$("#nuevasActualizar").addEventListener("click", actualizar);
+$("#nuevasCerrar").addEventListener("click", () => mostrarNuevas([]));
+window.addEventListener("resize", ajustarGraficos);
+
+cargar();
+if (esApp()) {
+  window.__TAURI__.event.listen("progreso", (ev) => progreso(ev.payload));
+  window.__TAURI__.event.listen("bases-nuevas", (ev) => mostrarNuevas(ev.payload));
+  api("revisar_bases").then(mostrarNuevas).catch(() => {});
+} else prepararNavegador();
+</script>
+</body>
+</html>
