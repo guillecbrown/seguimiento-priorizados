@@ -1080,7 +1080,8 @@ function abrirFicha(e) {
       ${fila("Estado INAF", e.estado_inaf)}${fila("Caja según INAF", NOMBRE_NODO[e.categoria_inaf])}
       ${e.siged && e.siged.length ? fila("Caja con SIGED", NOMBRE_NODO[e.categoria_siged]) + e.siged.map((d, i) => fila(i ? "" : "Firmado en SIGED (no en INAF)", `${d.tipo} · ${d.numero} · ${fmt(d.fecha)} · ${d.firmante}`)).join("") : ""}
       ${fila("Nota SIGED", e.siged_nota)}${fila("RSD de inicio", e.rsd_inicio)}
-      ${fila("Notificación del inicio", fmt(e.notificacion) + (e.rsd_notificada && e.rsd_notificada !== e.rsd_inicio ? ` (${e.rsd_notificada})` : ""))}
+      ${e.rsd_notificada || e.notificacion ? fila("Notificación del inicio", (fmt(e.notificacion) || "aún sin notificar") +
+        (e.rsd_notificada && (e.rsd_notificada !== e.rsd_inicio || e.rsd_sentido && e.rsd_sentido !== "INICIO") ? ` (${e.rsd_notificada}${e.rsd_sentido ? " · " + e.rsd_sentido.toLowerCase() : ""})` : "")) : ""}
       ${e.categoria === "INI" && e.ifi_desde ? fila("Descargos hasta", fmt(e.descargos_vence)) + fila("IFI desde", fmt(e.ifi_desde)) : ""}
       ${fila("Jefe de equipo", e.jefe)}${fila("Analista", e.analista)}
       <h3>Riesgo</h3>
@@ -1531,7 +1532,7 @@ const COLS_IFI_TODOS = [...COLS_IFI.slice(0, 6), ["categoria", "Etapa", (e) => N
 const EXPORT_COLS_IFI = [
   ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 867", "id867"], ["Subdirección", "subdireccion"], ["Sector", "sector"],
   ["Administrado", "administrado"], ["Jefe de equipo", "jefe"], ["Estado INAF", "estado_inaf"], ["RSD de inicio", "rsd_inicio"],
-  ["RSD notificada", "rsd_notificada"], ["Notificación del inicio", "notificacion"], ["Descargos hasta", "descargos_vence"], ["IFI desde", "ifi_desde"],
+  ["Última RSD de inicio", "rsd_notificada"], ["Sentido de esa RSD", "rsd_sentido"], ["Notificación del inicio", "notificacion"], ["Descargos hasta", "descargos_vence"], ["IFI desde", "ifi_desde"],
   ["Situación del IFI", "_sit_ifi"], ["Días al IFI (negativo: ya habilitado)", "_dias_ifi"], ["Fecha límite", "limite"], ["Tipo de fecha límite", "tipo_limite"],
   ["Margen para emitir (días)", "_ventana"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"], ["Programación del mes", "programacion"],
 ];
@@ -1602,7 +1603,9 @@ function dibujarIfi() {
   const sinProg = (l) => l.filter((e) => !e.programado).length;
   const tarde = ini.filter((e) => e._tarde);
   const hasta = D.feriados_hasta ? ` (cargados hasta el ${fmt(D.feriados_hasta)})` : "";
-  $("#iRegla").textContent = `IFI desde: día hábil siguiente al fin de los ${D.plazo_descargos_dias} días hábiles de descargos, contados desde el día siguiente a la notificación del inicio que registra INAF. Sin sábados, domingos ni feriados de config.json${hasta}.`;
+  const sent = (D.sentidos_rsd_inicio || []).map((s) => s.toLowerCase()).join(", ");
+  $("#iRegla").textContent = `IFI desde: día hábil siguiente al fin de los ${D.plazo_descargos_dias} días hábiles de descargos, contados desde el día siguiente a la notificación de la última RSD de inicio` +
+    (D.archivo_documentos ? ` (INAF documentos; sentidos: ${sent})` : " (stock INAF)") + `. Sin sábados, domingos ni feriados de config.json${hasta}.`;
 
   const t = ini.length, nombre = IFI.grupo === "408" ? "Iniciados (408)" : "Iniciados (867)";
   $("#kpisIfi").innerHTML = `
@@ -1614,7 +1617,7 @@ function dibujarIfi() {
     <div class="kpi"><div class="l">Se habilitan en 30 días</div><div class="v">${en30.length}<small>${pctTxt(en30.length, t)}</small></div>
       <div class="s">${sinProg(en30)} sin IFI programado · ${por.length - en30.length} después</div><div class="b">${barraKpi([["#c4c4cc", en30.length]], t)}</div></div>
     <div class="kpi"><div class="l">Sin notificación en INAF</div><div class="v">${sin.length}<small>${pctTxt(sin.length, t)}</small></div>
-      <div class="s">RSD de inicio sin fecha de notificación</div><div class="b">${barraKpi([["#eb6834", sin.length]], t)}</div></div>`;
+      <div class="s">su última RSD de inicio aún no tiene notificación</div><div class="b">${barraKpi([["#eb6834", sin.length]], t)}</div></div>`;
 
   const aviso = $("#iTarde");
   aviso.classList.toggle("oculto", !tarde.length);
