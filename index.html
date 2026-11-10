@@ -68,6 +68,7 @@
   .seg { display: inline-flex; padding: 3px; background: var(--gris); border-radius: 8px; gap: 2px; }
   .seg button { border: 0; background: none; height: 26px; padding: 0 10px; border-radius: 6px; cursor: pointer; color: var(--suave); font-size: 13px; font-weight: 500; white-space: nowrap; }
   .seg button.on { background: var(--papel); color: var(--tinta); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04); }
+  .seg button .cta { margin-left: 4px; color: var(--tenue); font-weight: 400; font-variant-numeric: tabular-nums; }
   #nuevas { display: flex; align-items: center; gap: 10px; padding: 9px 24px; background: #fffbeb; border-bottom: 1px solid #fde68a; font-size: 13px; }
   #nuevas .lista { color: var(--suave); }
 
@@ -259,6 +260,7 @@
   <nav>
     <button data-vista="arbol" class="on">Árbol 408</button>
     <button data-vista="arbol867">Árbol 867</button>
+    <button data-vista="adicionales">Equipos adicionales</button>
     <button data-vista="linea">Línea de tiempo</button>
     <button data-vista="riesgo">Riesgo 408</button>
     <button data-vista="riesgo867">Riesgo 867</button>
@@ -335,6 +337,27 @@
     <div class="hoja resumen">
       <div class="barra"><h2>Texto por equipo</h2><span class="der"><button class="btn chico" id="exportar867">Exportar a Excel</button><button class="btn chico" id="copiar867">Copiar</button></span></div>
       <div id="resumen867"></div>
+    </div>
+  </section>
+
+  <section id="v-adicionales" class="oculto">
+    <div class="barra">
+      <span>Sector</span>
+      <div class="seg" id="filtroSectorAd"></div>
+      <span class="info">Expedientes de la lista de 867 que figuran como equipo adicional. La subdirección se elige arriba a la derecha.</span>
+      <span class="der"><button class="btn chico" id="exportarAd">Exportar a Excel</button></span>
+    </div>
+    <div class="hoja kpis" id="kpisAd"></div>
+    <div class="hoja plana">
+      <div class="barra cabA">
+        <h2>Árbol de estados</h2>
+        <span class="ley">
+          <span><span class="punto"></span> sin programar este mes</span>
+          <span>Clic en una caja para ver sus expedientes</span>
+        </span>
+        <span class="der"><button class="btn chico" data-imagen="svgArbolAd">Guardar imagen</button></span>
+      </div>
+      <svg id="svgArbolAd" viewBox="0 0 1760 446"></svg>
     </div>
   </section>
 
@@ -556,6 +579,25 @@ const ARBOL_867 = {
   ids: { nuevos: "#verNuevos867", otros: "#verOtros867", ley: "#leyNuevos867" },
   nuevos: () => verNuevos867, otros: () => verOtros867, res: () => resaltado867, serie: () => D.serie_867,
 };
+// Equipos adicionales: los de la lista de 867 cuyo equipo dice "EQUIPO ADICIONAL". Es el mismo arbol con un
+// filtro propio por sector (el de subdireccion es el de arriba). No tiene nuevos no previstos, que no llevan
+// equipo, ni cambio en 7 dias, porque el historial se guarda por subdireccion y no por equipo.
+let SECTOR_AD = "";           // "" = todos los sectores
+const esAdicional = (e) => /ADICIONAL/i.test(e.equipo || "");
+const sectorTxt = (s) => s ? s[0] + s.slice(1).toLowerCase() : "Sin sector";
+const corto = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
+const ARBOL_AD = {
+  svg: "#svgArbolAd", grupo: "867", nuevo: "NUEVO867", raiz: "Equipos adicionales", de: "de los equipos adicionales", kpis: "#kpisAd",
+  ids: null, nuevos: () => false, otros: () => true, res: () => null, serie: () => null,
+  filtro: (e) => esAdicional(e) && (!SECTOR_AD || e.sector === SECTOR_AD),
+  // la caja raiz es angosta: muestra el filtro puesto en vez del nombre completo
+  caja: () => SECTOR_AD ? corto(sectorTxt(SECTOR_AD), 20) : SUB === "Todas" ? "Equipos adicionales" : "Adicionales · " + SUB,
+  sufijo: () => (SUB === "Todas" ? "" : " · " + SUB) + (SECTOR_AD ? " · " + sectorTxt(SECTOR_AD) : ""),
+  titulo: () => "Equipos adicionales" + (SECTOR_AD ? " · " + sectorTxt(SECTOR_AD) : ""),
+  nota: (n) => `${pctTxt(n, universo("867").length)} de los 867${SUB === "Todas" ? "" : " de " + SUB}`,
+};
+// universo de un arbol: su grupo (o sus nuevos) con el filtro de subdireccion y, si lo tiene, el propio
+const uniArbol = (A, grupo = A.grupo) => A.filtro ? universo(grupo).filter(A.filtro) : universo(grupo);
 
 function el(tag, attrs, padre, txt) {
   const n = document.createElementNS(NS, tag);
@@ -605,14 +647,16 @@ function dibujarArbol(A = ARBOL_408) {
   el("style", {}, svg, ESTILO_SVG);
   svg.setAttribute("viewBox", `0 0 ${ANCHO_ARBOL} ${ALTO_ARBOL}`);
   el("rect", { x: 0, y: 0, width: ANCHO_ARBOL, height: ALTO_ARBOL, fill: "#fff" }, svg);
-  const u408 = universo(A.grupo), uNue = universo(A.nuevo);
+  const u408 = uniArbol(A), uNue = uniArbol(A, A.nuevo);
   const total = u408.length;
   const cuenta = {};
   for (const k in NODOS) cuenta[k] = [u408.filter(NODOS[k].f).length, uNue.filter(NODOS[k].f).length];
   const conNuevos = A.nuevos(), conOtros = A.otros(), res = A.res();
-  $(A.ids.nuevos).checked = conNuevos;
-  $(A.ids.otros).checked = conOtros;
-  $(A.ids.ley).classList.toggle("oculto", !conNuevos);
+  if (A.ids) {
+    $(A.ids.nuevos).checked = conNuevos;
+    $(A.ids.otros).checked = conOtros;
+    $(A.ids.ley).classList.toggle("oculto", !conNuevos);
+  }
   const mostrarOtros = conOtros && cuenta.conc_ot[0] + (conNuevos ? cuenta.conc_ot[1] : 0) > 0;
   const vis = (k) => k !== "conc_ot" || mostrarOtros;
 
@@ -650,7 +694,7 @@ function dibujarArbol(A = ARBOL_408) {
     el("rect", { x: bx, y: by, width: BW, height: BH, rx: 8, fill: fondo, stroke: borde, class: "a-marco" }, g);
     // franja con el color de la etapa
     if (nodo.et) el("path", { d: `M${bx + 1.5},${by + 11} V${by + BH - 11}`, stroke: ETAPA_COLOR[nodo.et], "stroke-width": 3, "stroke-linecap": "round", opacity: cero ? 0.3 : 1 }, g);
-    el("text", { x: bx + 14, y: by + 25, class: raiz ? "a-t a-tr" : "a-t" }, g, raiz ? (SUB === "Todas" ? A.raiz : A.raiz + " · " + SUB) : nodo.t);
+    el("text", { x: bx + 14, y: by + 25, class: raiz ? "a-t a-tr" : "a-t" }, g, raiz ? (A.caja ? A.caja() : SUB === "Todas" ? A.raiz : A.raiz + " · " + SUB) : nodo.t);
     el("text", { x: bx + 14, y: by + 55, class: raiz ? "a-n a-nr" : "a-n" }, g, n);
     // punto naranja: le falta programar el producto que le toca
     if (nodo.alerta && n > 0) el("circle", { cx: bx + 22 + String(n).length * 15.5, cy: by + 45, r: 4, fill: "#ea580c" }, g);
@@ -661,7 +705,7 @@ function dibujarArbol(A = ARBOL_408) {
       if (w) el("rect", { x: bx + 14, y: by + BH - 9, width: w, height: 3, rx: 1.5, fill: nodo.et ? ETAPA_COLOR[nodo.et] : nodo.rama === "conc" ? "#0ca30c" : "#71717a" }, g);
     }
     el("title", {}, g, `${caminoDe(k).map(nombreNodo).join(" › ")}: ${n} ${A.de}${nn ? ` y ${nn} nuevos no previstos` : ""}`);
-    g.addEventListener("click", () => abrirPanel(k, A.grupo));
+    g.addEventListener("click", () => abrirPanel(k, A.grupo, A));
     // nuevos no previstos: etiqueta sobre el borde de la caja; abre solo los nuevos
     if (conNuevos && nn > 0) {
       const txt = raiz ? `+${nn} nuevos` : `+${nn}`, ab = 12 + txt.length * 7.2;
@@ -670,7 +714,7 @@ function dibujarArbol(A = ARBOL_408) {
       el("rect", { x: bx + BW - ab - 8, y: by - 10, width: ab, height: 20, rx: 10 }, gb);
       el("text", { x: bx + BW - 8 - ab / 2, y: by + 4.5, class: "a-bt" }, gb, txt);
       el("title", {}, gb, `${nn} nuevos no previstos en ${nombreNodo(k)}`);
-      gb.addEventListener("click", () => abrirPanel(k, A.nuevo));
+      gb.addEventListener("click", () => abrirPanel(k, A.nuevo, A));
     }
   }
 }
@@ -840,9 +884,10 @@ function coincide(e, q) {
 }
 
 const NOMBRE_GRUPO = { "408": "408 priorizados", NUEVO: "Nuevos no previstos", "867": "Priorizados 867", NUEVO867: "Nuevos no previstos (867)" };
-function abrirPanel(nodo, grupo) {
-  const filas = universo(grupo).filter(NODOS[nodo].f);
-  const camino = caminoDe(nodo).map((k) => k === "raiz" ? NOMBRE_GRUPO[grupo] : nombreNodo(k));
+function abrirPanel(nodo, grupo, A) {
+  const filas = (A ? uniArbol(A, grupo) : universo(grupo)).filter(NODOS[nodo].f);
+  const raiz = A && A.titulo ? A.titulo() : NOMBRE_GRUPO[grupo];
+  const camino = caminoDe(nodo).map((k) => k === "raiz" ? raiz : nombreNodo(k));
   if (nodo !== "raiz" && grupo === "NUEVO") camino[0] = "Nuevos no previstos";
   abrirTabla(camino.join(" › "), filas);
 }
@@ -1571,6 +1616,7 @@ function pintarTodo() {
   dibujarArbol();
   dibujarKpis(ARBOL_867);
   dibujarArbol(ARBOL_867);
+  dibujarAdicionales();
   dibujarResumen867();
   dibujarResumen();
   dibujarLineas();
@@ -1582,7 +1628,7 @@ function pintarTodo() {
 
 // cifras clave sobre el arbol; el cambio en 7 dias sale de la serie diaria (solo INAF)
 function dibujarKpis(A = ARBOL_408) {
-  const l = universo(A.grupo), nue = universo(A.nuevo), t = l.length;
+  const l = uniArbol(A), nue = uniArbol(A, A.nuevo), t = l.length;
   const conc = l.filter(NODOS.conc.f).length, pend = t - conc;
   const evit = conc + l.filter((e) => e.categoria === "INI" || e.categoria === "IFI").length;
   const subs = SUB === "Todas" ? D.linea.subdirecciones : [SUB];
@@ -1601,8 +1647,8 @@ function dibujarKpis(A = ARBOL_408) {
   }
   const CONC = ["RD", "NI", "OTRO"];
   $(A.kpis).innerHTML = `
-    <div class="kpi"><div class="l">${A.raiz}${SUB === "Todas" ? "" : " · " + SUB}</div><div class="v">${t}</div>
-      <div class="s"><span class="pill">+${nue.length}</span> nuevos no previstos</div>
+    <div class="kpi"><div class="l">${A.raiz}${A.sufijo ? A.sufijo() : SUB === "Todas" ? "" : " · " + SUB}</div><div class="v">${t}</div>
+      <div class="s">${A.nota ? A.nota(t) : `<span class="pill">+${nue.length}</span> nuevos no previstos`}</div>
       <div class="b" title="Concluidos y pendientes por etapa">${barraKpi([["#1d6b35", conc], ...ETAPAS.map((c) => [ETAPA_COLOR[c], l.filter((e) => e.categoria === c).length])], t)}</div></div>
     <div class="kpi"><div class="l">Prescripción evitada</div><div class="v">${evit}<small>${pctTxt(evit, t)}</small></div>
       <div class="s">${cambio([...CONC, "INI", "IFI"], true)}</div><div class="b">${barraKpi([["#1d6b35", evit]], t)}</div></div>
@@ -1612,6 +1658,19 @@ function dibujarKpis(A = ARBOL_408) {
       <div class="s">${cambio(PEND, false)}</div><div class="b">${barraKpi(ETAPAS.map((c) => [ETAPA_COLOR[c], l.filter((e) => e.categoria === c).length]), t)}</div></div>`;
 }
 const barraKpi = (partes, t) => partes.filter(([, n]) => n > 0).map(([c, n]) => `<i style="width:${(n * 100) / t}%;background:${c}"></i>`).join("");
+
+// pestana Equipos adicionales: el filtro de sector solo ofrece los sectores que quedan con la subdireccion elegida
+function dibujarAdicionales() {
+  const base = universo("867").filter(esAdicional);
+  const porSector = new Map();
+  for (const e of base) if (e.sector) porSector.set(e.sector, (porSector.get(e.sector) || 0) + 1);
+  if (SECTOR_AD && !porSector.has(SECTOR_AD)) SECTOR_AD = "";
+  const ops = [["", "Todos", base.length], ...[...porSector].sort((a, b) => a[0].localeCompare(b[0], "es")).map(([s, n]) => [s, sectorTxt(s), n])];
+  $("#filtroSectorAd").innerHTML = ops.map(([s, t, n]) =>
+    `<button data-sec="${escapar(s)}" class="${s === SECTOR_AD ? "on" : ""}">${escapar(t)}<span class="cta">${n}</span></button>`).join("");
+  dibujarKpis(ARBOL_AD);
+  dibujarArbol(ARBOL_AD);
+}
 
 // texto por equipo bajo el arbol de 867; sigue el filtro de subdireccion y el selector INAF / INAF + SIGED
 const EQUIPOS = [["EQUIPO REGULAR", "equipo regular"], ["EQUIPO ADICIONAL", "equipo adicional"]];
@@ -1665,7 +1724,7 @@ function cambiarSub(s) {
 
 function mostrarVista(vista) {
   document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x.dataset.vista === vista));
-  ["arbol", "arbol867", "linea", "riesgo", "riesgo867", "lista", "notas"].forEach((v) => $("#v-" + v).classList.toggle("oculto", v !== vista));
+  ["arbol", "arbol867", "adicionales", "linea", "riesgo", "riesgo867", "lista", "notas"].forEach((v) => $("#v-" + v).classList.toggle("oculto", v !== vista));
   if (vista.startsWith("riesgo")) ajustarGraficos();
 }
 
@@ -2038,6 +2097,15 @@ $("#verOtros867").addEventListener("change", (ev) => {
   if (D) dibujarArbol(ARBOL_867);
 });
 $("#exportar867").addEventListener("click", () => D && exportar(filas867(), "originales_867_" + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], "867 originales", EXPORT_COLS_867));
+const archivoSectorAd = () => SECTOR_AD ? SECTOR_AD.toLowerCase().replace(/\s+/g, "_") + "_" : "";
+$("#filtroSectorAd").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-sec]");
+  if (!b) return;
+  SECTOR_AD = b.dataset.sec;
+  if (D) dibujarAdicionales();
+});
+$("#exportarAd").addEventListener("click", () => D && exportar(uniArbol(ARBOL_AD).sort((a, b) => a.id867 - b.id867),
+  "equipos_adicionales_" + (SUB === "Todas" ? "" : SUB + "_") + archivoSectorAd() + hoyTxt(), [], "Equipos adicionales", EXPORT_COLS_867));
 $("#copiar").addEventListener("click", () => D && copiarResumen());
 $("#q").addEventListener("input", buscarGlobal);
 $("#q").addEventListener("focus", () => hallados.length && pintarResultados());
@@ -2094,8 +2162,8 @@ document.querySelectorAll("[data-imagen]").forEach((b) => b.addEventListener("cl
   if (!D) return;
   const id = b.dataset.imagen;
   const nombre = { lineas: "linea_tiempo_", gSemanas: "vencen_por_semana_", gCurva: "curva_avance_", svgArbol867: "arbol_867_",
-    gSemanas867: "vencen_por_semana_867_", gCurva867: "curva_avance_867_" }[id] || "arbol_priorizados_";
-  guardarImagen(id, nombre + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt());
+    svgArbolAd: "arbol_equipos_adicionales_", gSemanas867: "vencen_por_semana_867_", gCurva867: "curva_avance_867_" }[id] || "arbol_priorizados_";
+  guardarImagen(id, nombre + (SUB === "Todas" ? "" : SUB + "_") + (id === "svgArbolAd" ? archivoSectorAd() : "") + hoyTxt());
 }));
 $("#nuevasActualizar").addEventListener("click", actualizar);
 $("#nuevasCerrar").addEventListener("click", () => mostrarNuevas([]));
