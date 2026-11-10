@@ -1724,6 +1724,7 @@ async function cargar() {
 function sinDatos(si) {
   $("#vacio").classList.toggle("oculto", !si);
   $("main").classList.toggle("oculto", si);
+  $(".subbar").classList.toggle("oculto", si);   // sin datos tampoco se ven las pestanas (408, 867)
 }
 
 async function cargarArchivo(f) {
