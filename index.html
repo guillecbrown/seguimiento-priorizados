@@ -214,12 +214,16 @@
   #alerta-cuerpo, #alerta-cuerpo867, #ifi-cuerpo { max-height: 520px; overflow: auto; }
   /* pestana Notificacion e IFI: ventana de cada expediente en una mini barra */
   .vent { display: inline-flex; align-items: center; gap: 8px; }
-  #iTabla td.cort { max-width: 170px; }
-  .vent .b { position: relative; width: 120px; height: 8px; border-radius: 4px; background: #f1f1f3; }
+  #iTabla td.cort { max-width: 150px; }
+  #iTabla td.sit { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  .vent .b { position: relative; width: 100px; height: 8px; border-radius: 4px; background: #f1f1f3; }
   .vent .b i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
   .vent .b i.d { background: #d4d4d8; }
   .vent .b i.v { background: #1baf7a; }
   .vent .b i.t { background: #d03b3b; }
+  .vent .b i.r { background: #f3d2bf; }
+  #kpisIfi { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .aviso-ifi { flex-wrap: wrap; }
   .vent .b b { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #18181b; border-radius: 1px; }
   .vent small { min-width: 64px; color: var(--suave); font-variant-numeric: tabular-nums; }
   .vent small.mal { color: #b42318; font-weight: 600; }
@@ -427,13 +431,17 @@
           <button data-f="ya">Ya pueden emitir IFI</button>
           <button data-f="por">Por habilitar</button>
           <button data-f="sin">Sin notificación</button>
+          <button data-f="nollega">No llegan</button>
+          <button data-f="rd">Con IFI: RD</button>
           <button data-f="todos">Todos los priorizados</button>
         </div>
-        <label class="chk"><input type="checkbox" id="iSinProg"> Solo sin IFI programado</label>
+        <label class="chk" title="El producto que les toca: IFI a los iniciados, RD a los que tienen IFI"><input type="checkbox" id="iSinProg"> Solo sin programar</label>
         <span class="info" id="iInfo"></span>
         <span class="der"><button class="btn chico" id="iExportar">Exportar a Excel</button></span>
       </div>
-      <p class="expl" style="margin: 8px 20px 6px">Ventana: de la notificación a la fecha límite (al pasar el mouse se ven las fechas, incluido el fin de los descargos). Gris, el plazo de descargos; verde, desde que se puede emitir el IFI; la raya negra es hoy. El número es el margen que queda para emitirlo antes de la fecha límite.</p>
+      <p class="expl" style="margin: 8px 20px 6px">Ventana: de la notificación (de la RSD, o del IFI en «Con IFI: RD») a la fecha límite; al pasar el mouse se ven las fechas.
+        Gris: plazo de descargos. Verde: desde que se puede emitir el IFI (o la RD) hasta su fecha tope. Salmón: lo que hay que reservar para el resto del trámite hasta la fecha límite (en rojo si ya no alcanza). La raya negra es hoy.
+        El número son los días que quedan para emitirlo antes de su fecha tope.</p>
       <div id="ifi-cuerpo"><table id="iTabla"></table></div>
     </div>
   </section>
@@ -942,7 +950,7 @@ function abrirPanel(nodo, grupo, A) {
 }
 
 function abrirTabla(titulo, filas, cols = COLS) {
-  Object.assign(panel, { filas, cols, orden: cols === COLS ? "dias_limite" : cols === COLS_IFI ? "ifi_desde" : "_sit", asc: true });
+  Object.assign(panel, { filas, cols, orden: cols === COLS ? "dias_limite" : [COLS_IFI, COLS_RD].includes(cols) ? "_ventana" : "_sit", asc: true });
   $("#pTitulo").textContent = titulo;
   $("#pBuscar").value = "";
   $("#velo").classList.remove("oculto");
@@ -1082,7 +1090,9 @@ function abrirFicha(e) {
       ${fila("Nota SIGED", e.siged_nota)}${fila("RSD de inicio", e.rsd_inicio)}
       ${e.rsd_notificada || e.notificacion ? fila("Notificación del inicio", (fmt(e.notificacion) || "aún sin notificar") +
         (e.rsd_notificada && (e.rsd_notificada !== e.rsd_inicio || e.rsd_sentido && e.rsd_sentido !== "INICIO") ? ` (${e.rsd_notificada}${e.rsd_sentido ? " · " + e.rsd_sentido.toLowerCase() : ""})` : "")) : ""}
-      ${e.categoria === "INI" && e.ifi_desde ? fila("Descargos hasta", fmt(e.descargos_vence)) + fila("IFI desde", fmt(e.ifi_desde)) : ""}
+      ${e.categoria === "INI" && e.ifi_desde ? fila("Descargos hasta", fmt(e.descargos_vence)) + fila("IFI desde", fmt(e.ifi_desde)) + fila("IFI a más tardar", fmt(e.ifi_mas_tardar)) : ""}
+      ${e.ifi_numero ? fila("Último IFI", `${e.ifi_numero} · ${fmt(e.ifi_emision)}`) + fila("Notificación del IFI", fmt(e.ifi_notificacion) || "aún sin notificar") : ""}
+      ${e.categoria === "IFI" && e.rd_desde ? fila("Descargos al IFI hasta", fmt(e.descargos_ifi_vence)) + fila("RD desde", fmt(e.rd_desde)) + fila("RD a más tardar", fmt(e.rd_mas_tardar)) : ""}
       ${fila("Jefe de equipo", e.jefe)}${fila("Analista", e.analista)}
       <h3>Riesgo</h3>
       ${fila("Prescripción", fmt(e.prescripcion) || "sin fecha en INAF")}${fila("Caducidad", fmt(e.caducidad) || "sin fecha en INAF")}
@@ -1512,47 +1522,75 @@ function dibujarRiesgo(R = RIESGO_408) {
 }
 
 // ------------------------------------------------------------ notificacion e IFI
-// El motor trae, de INAF, la notificacion del inicio (la mas reciente si hubo otra RSD) y calcula
-// "IFI desde": el dia habil siguiente al vencimiento de los descargos (plazo_descargos_dias habiles
-// desde el dia siguiente a la notificacion, sin feriados de config.json). Aqui solo se clasifica.
-const IFI = { grupo: "408", filtro: "ini", tabla: { filas: [], orden: "ifi_desde", asc: true, cols: null, tabla: "#iTabla", buscar: null, info: "#iInfo" } };
-const IFI_TXT = { ya: "Ya puede emitir IFI", por: "Por habilitar", sin: "Sin notificación en INAF", otra: "Otra etapa" };
-const COLS_IFI = [
-  COLS[0], COLS[1], COLS[2], COLS[3],
-  ["administrado", "Administrado", (e) => e.administrado],
-  ["jefe", "Jefe de equipo", (e) => e.jefe],
+// El motor trae la notificacion de la ultima RSD de inicio (INAF documentos) y el ultimo IFI con la
+// notificacion de su carta, y calcula en dias habiles: "IFI desde" (fin de los descargos a la RSD),
+// "RD a mas tardar" y "IFI a mas tardar" (hacia atras desde la fecha limite: notificar la RD, descargos al
+// IFI y notificar el IFI) y "RD desde" (fin de los descargos al IFI). Aqui solo se clasifica.
+const IFI = { grupo: "408", filtro: "ini", tabla: { filas: [], orden: "_ventana", asc: true, cols: null, tabla: "#iTabla", buscar: null, info: "#iInfo" } };
+const IFI_TXT = {
+  ya: "Ya puede emitir IFI", por: "En descargos a la RSD", sin: "Sin notificación del inicio",
+  rd_ya: "Ya puede emitir RD", rd_por: "En descargos al IFI", rd_sinnot: "IFI sin notificar", rd_sinifi: "IFI no figura en INAF documentos",
+  otra: "Otra etapa",
+};
+const C_EXP = [COLS[0], COLS[1], COLS[2], COLS[3], ["administrado", "Administrado", (e) => e.administrado], ["jefe", "Jefe de equipo", (e) => e.jefe]];
+const C_LIMITE = ["limite", "Fecha límite", (e) => e.limite ? `${fmt(e.limite)} · ${e.tipo_limite.slice(0, 3)}.` : e.tipo_limite];
+const C_VENTANA = ["_ventana", "Ventana", (e) => e._ventana_txt || ""];
+const C_PROG = ["programado", "Programado", null];
+const COLS_IFI = [...C_EXP,
   ["notificacion", "Notificación", (e) => fmt(e.notificacion)],
-  ["ifi_desde", "IFI desde", (e) => e.categoria === "INI" ? fmt(e.ifi_desde) : ""],
+  ["ifi_desde", "IFI desde", (e) => fmt(e.ifi_desde)],
   ["_dias_ifi", "Días", (e) => e._dias_ifi ?? "", "num"],
-  ["limite", "Fecha límite", (e) => e.limite ? `${fmt(e.limite)} · ${e.tipo_limite.slice(0, 5)}.` : e.tipo_limite],
-  ["_ventana", "Ventana", (e) => e._ventana_txt || ""],
-  ["programado", "Programado", null],
+  ["ifi_mas_tardar", "IFI a más tardar", (e) => fmt(e.ifi_mas_tardar)],
+  C_LIMITE, C_VENTANA, C_PROG,
 ];
-const COLS_IFI_TODOS = [...COLS_IFI.slice(0, 6), ["categoria", "Etapa", (e) => NOMBRE_NODO[e.categoria] || e.categoria], ...COLS_IFI.slice(6)];
+const COLS_RD = [...C_EXP,
+  ["ifi_notificacion", "IFI notificado", (e) => fmt(e.ifi_notificacion)],
+  ["rd_desde", "RD desde", (e) => fmt(e.rd_desde)],
+  ["_dias_ifi", "Días", (e) => e._dias_ifi ?? "", "num"],
+  ["rd_mas_tardar", "RD a más tardar", (e) => fmt(e.rd_mas_tardar)],
+  C_LIMITE, C_VENTANA, C_PROG,
+];
+const COLS_IFI_TODOS = [...C_EXP,
+  ["categoria", "Etapa", (e) => NOMBRE_NODO[e.categoria] || e.categoria],
+  ["notificacion", "Notificación", (e) => fmt(e.notificacion)],
+  ["ifi_notificacion", "IFI notificado", (e) => fmt(e.ifi_notificacion)],
+  ["_sit_ifi", "Situación", (e) => e._ifi === "otra" ? "" : e._sit_ifi, "sit"],
+  C_LIMITE, C_VENTANA, C_PROG,
+];
 const EXPORT_COLS_IFI = [
   ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 867", "id867"], ["Subdirección", "subdireccion"], ["Sector", "sector"],
   ["Administrado", "administrado"], ["Jefe de equipo", "jefe"], ["Estado INAF", "estado_inaf"], ["RSD de inicio", "rsd_inicio"],
-  ["Última RSD de inicio", "rsd_notificada"], ["Sentido de esa RSD", "rsd_sentido"], ["Notificación del inicio", "notificacion"], ["Descargos hasta", "descargos_vence"], ["IFI desde", "ifi_desde"],
-  ["Situación del IFI", "_sit_ifi"], ["Días al IFI (negativo: ya habilitado)", "_dias_ifi"], ["Fecha límite", "limite"], ["Tipo de fecha límite", "tipo_limite"],
-  ["Margen para emitir (días)", "_ventana"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"], ["Programación del mes", "programacion"],
+  ["Última RSD de inicio", "rsd_notificada"], ["Sentido de esa RSD", "rsd_sentido"], ["Notificación del inicio", "notificacion"],
+  ["Descargos a la RSD hasta", "descargos_vence"], ["IFI desde", "ifi_desde"], ["IFI a más tardar", "ifi_mas_tardar"],
+  ["Último IFI", "ifi_numero"], ["Emisión del IFI", "ifi_emision"], ["Notificación del IFI", "ifi_notificacion"],
+  ["Descargos al IFI hasta", "descargos_ifi_vence"], ["RD desde", "rd_desde"], ["RD a más tardar", "rd_mas_tardar"],
+  ["Situación", "_sit_ifi"], ["Días al IFI o a la RD (negativo: ya habilitado)", "_dias_ifi"], ["Fecha límite", "limite"], ["Tipo de fecha límite", "tipo_limite"],
+  ["Margen (días; negativo: no llega)", "_ventana"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"], ["Programación del mes", "programacion"],
 ];
 
-// situacion de cada expediente frente al IFI, con dias medidos desde el stock (como la fecha limite)
+// situacion de cada expediente: iniciados frente al IFI y con IFI frente a la RD; dias desde el stock
 function clasificarIfi(e) {
   const hoy = diaDe(D.corte_stock);
-  e._dias_ifi = null; e._ventana = null; e._ventana_txt = ""; e._tarde = false;
-  if (e.categoria !== "INI") { e._ifi = "otra"; e._sit_ifi = IFI_TXT.otra; return; }
-  if (!e.ifi_desde) { e._ifi = "sin"; e._sit_ifi = IFI_TXT.sin; return; }
-  const f = diaDe(e.ifi_desde);
-  e._dias_ifi = Math.round((f - hoy) / DIA);
-  e._ifi = e._dias_ifi <= 0 ? "ya" : "por";
-  e._sit_ifi = IFI_TXT[e._ifi];
-  if (e.limite) {
-    // margen: dias entre el momento en que ya se puede emitir (hoy o mas adelante) y la fecha limite
-    e._ventana = Math.round((diaDe(e.limite) - Math.max(f, hoy)) / DIA);
-    e._tarde = f > diaDe(e.limite);
-    e._ventana_txt = e._tarde ? "se habilita después de la fecha límite" : `${e._ventana} días de margen`;
+  e._dias_ifi = null; e._ventana = null; e._ventana_txt = ""; e._tarde = false; e._ifi = "otra";
+  // f: desde cuando se puede emitir el producto; m: a mas tardar
+  let f = null, m = null;
+  if (e.categoria === "INI") {
+    if (!e.ifi_desde) e._ifi = "sin";
+    else { f = diaDe(e.ifi_desde); m = e.ifi_mas_tardar ? diaDe(e.ifi_mas_tardar) : null; e._ifi = f <= hoy ? "ya" : "por"; }
+  } else if (e.categoria === "IFI") {
+    if (!e.ifi_numero) e._ifi = "rd_sinifi";
+    else if (!e.rd_desde) e._ifi = "rd_sinnot";
+    else { f = diaDe(e.rd_desde); m = e.rd_mas_tardar ? diaDe(e.rd_mas_tardar) : null; e._ifi = f <= hoy ? "rd_ya" : "rd_por"; }
   }
+  e._sit_ifi = IFI_TXT[e._ifi];
+  if (f === null) return;
+  e._dias_ifi = Math.round((f - hoy) / DIA);
+  if (m === null) return;
+  const prod = e.categoria === "INI" ? "el IFI" : "la RD";
+  // margen: dias desde que ya se puede emitir (hoy o mas adelante) hasta el "a mas tardar"
+  e._ventana = Math.round((m - Math.max(f, hoy)) / DIA);
+  e._tarde = e._ventana < 0;
+  e._ventana_txt = !e._tarde ? `${e._ventana} días para emitir ${prod}` : f > m ? `no llega: ${prod} se habilita después de su fecha tope` : `no llega: ya pasó la fecha tope para ${prod}`;
 }
 
 function universoIfi() {
@@ -1562,69 +1600,84 @@ function universoIfi() {
   return l;
 }
 
+// mini barra: de la notificacion (de la RSD o del IFI) a la fecha limite
 function ventanaHtml(e) {
-  if (e.categoria !== "INI" || !e.notificacion) return "";
-  const n = diaDe(e.notificacion), f = diaDe(e.ifi_desde), hoy = diaDe(D.corte_stock);
-  const lim = e.limite ? diaDe(e.limite) : null;
+  const ini = e.categoria === "INI";
+  const [nT, fT, mT] = ini ? [e.notificacion, e.ifi_desde, e.ifi_mas_tardar] : e.categoria === "IFI" ? [e.ifi_notificacion, e.rd_desde, e.rd_mas_tardar] : [];
+  if (!nT || !fT) return "";
+  const n = diaDe(nT), f = diaDe(fT), hoy = diaDe(D.corte_stock);
+  const lim = e.limite ? diaDe(e.limite) : null, m = mT ? diaDe(mT) : null;
   const fin = Math.max(f, lim || f, hoy) + DIA, ancho = fin - n;
   const x = (t) => Math.max(0, Math.min(100, ((t - n) * 100) / ancho)).toFixed(1) + "%";
-  let barras = `<i class="d" style="left:0;width:${x(f)}"></i>`;
-  if (lim && !e._tarde) barras += `<i class="v" style="left:${x(f)};width:calc(${x(lim)} - ${x(f)})"></i>`;
-  if (e._tarde) barras = `<i class="t" style="left:0;width:${x(lim)}"></i><i class="d" style="left:${x(lim)};width:calc(${x(f)} - ${x(lim)})"></i>`;
-  const tip = `Notificación ${fmt(e.notificacion)} · descargos hasta ${fmt(e.descargos_vence)} · IFI desde ${fmt(e.ifi_desde)}` +
+  const tramo = (cls, a, b) => (b > a ? `<i class="${cls}" style="left:${x(a)};width:calc(${x(b)} - ${x(a)})"></i>` : "");
+  let barras = tramo("d", n, f);
+  // verde: ventana para emitir; despues, el tramo reservado al resto del tramite (rojo si ya no alcanza)
+  if (m !== null) barras += tramo("v", f, m) + tramo(e._tarde ? "t" : "r", m, lim);
+  const prod = ini ? "IFI" : "RD";
+  const tip = (ini
+    ? `Notificación del inicio ${fmt(e.notificacion)} · descargos hasta ${fmt(e.descargos_vence)} · IFI desde ${fmt(e.ifi_desde)} · IFI a más tardar ${fmt(e.ifi_mas_tardar)} · RD a más tardar ${fmt(e.rd_mas_tardar)}`
+    : `${e.ifi_numero} notificado el ${fmt(e.ifi_notificacion)} · descargos al IFI hasta ${fmt(e.descargos_ifi_vence)} · RD desde ${fmt(e.rd_desde)} · RD a más tardar ${fmt(e.rd_mas_tardar)}`) +
     (e.limite ? ` · fecha límite ${fmt(e.limite)} (${e.tipo_limite})` : " · sin fecha límite en INAF");
-  const txt = !e.limite ? "sin fecha límite" : e._tarde ? "después del límite" : e._ventana < 0 ? "límite vencido" : `${e._ventana} d de margen`;
-  const mal = e._tarde || (e.limite && e._ventana < 0);
-  return `<span class="vent" title="${escapar(tip)}"><span class="b">${barras}<b style="left:${x(hoy)}"></b></span><small class="${mal ? "mal" : ""}">${txt}</small></span>`;
+  const txt = !e.limite ? "sin fecha límite" : e._tarde ? "no llega" : `${e._ventana} d para ${prod}`;
+  return `<span class="vent" title="${escapar(tip)}"><span class="b">${barras}<b style="left:${x(hoy)}"></b></span><small class="${e._tarde ? "mal" : ""}">${txt}</small></span>`;
 }
 
 function diasIfiHtml(e) {
   if (e._dias_ifi === null || e._dias_ifi === undefined) return "";
-  const d = e._dias_ifi;
+  const d = e._dias_ifi, prod = e.categoria === "INI" ? "el IFI" : "la RD";
   const cls = e._tarde ? "rojo" : d <= 0 ? "verde" : "sin";
   const t = d === 0 ? "hoy" : d < 0 ? `hace ${-d}` : `en ${d}`;
-  return `<span class="dias ${cls}" title="${d <= 0 ? "Ya se puede emitir el IFI" : "Aún corre el plazo de descargos"}">${t}</span>`;
+  return `<span class="dias ${cls}" title="${d <= 0 ? `Ya se puede emitir ${prod}` : "Aún corren los descargos"}">${t}</span>`;
 }
 
 function dibujarIfi() {
-  const sinDato = D.plazo_descargos_dias === undefined;
+  const sinDato = D.plazo_descargos_dias === undefined || D.plazo_descargos_ifi_dias === undefined;
   $("#iSinDato").classList.toggle("oculto", !sinDato);
   ["#kpisIfi", "#gIfi", "#ifi-cuerpo"].forEach((s) => $(s).closest(".hoja").classList.toggle("oculto", sinDato));
   if (sinDato) {
-    $("#iSinDato").innerHTML = `<p class="expl" style="margin:0">Este archivo de datos no trae la fecha de notificación. Actualiza las bases con la versión actual de la app y vuelve a cargarlo.</p>`;
+    $("#iSinDato").innerHTML = `<p class="expl" style="margin:0">Este archivo de datos no trae las fechas de notificación ni los plazos del IFI. Actualiza las bases con la versión actual de la app y vuelve a cargarlo.</p>`;
     $("#iTarde").classList.add("oculto");
     return;
   }
   const U = universoIfi();
-  const ini = U.filter((e) => e.categoria === "INI");
-  const de = (s) => ini.filter((e) => e._ifi === s);
-  const ya = de("ya"), por = de("por"), sin = de("sin");
+  const ini = U.filter((e) => e.categoria === "INI"), conIfi = U.filter((e) => e.categoria === "IFI");
+  const de = (l, s) => l.filter((e) => e._ifi === s);
+  const ya = de(ini, "ya"), por = de(ini, "por"), sin = de(ini, "sin");
   const en30 = por.filter((e) => e._dias_ifi <= 30);
   const sinProg = (l) => l.filter((e) => !e.programado).length;
-  const tarde = ini.filter((e) => e._tarde);
+  const noIni = ini.filter((e) => e._tarde), noRd = conIfi.filter((e) => e._tarde);
   const hasta = D.feriados_hasta ? ` (cargados hasta el ${fmt(D.feriados_hasta)})` : "";
-  const sent = (D.sentidos_rsd_inicio || []).map((s) => s.toLowerCase()).join(", ");
-  $("#iRegla").textContent = `IFI desde: día hábil siguiente al fin de los ${D.plazo_descargos_dias} días hábiles de descargos, contados desde el día siguiente a la notificación de la última RSD de inicio` +
-    (D.archivo_documentos ? ` (INAF documentos; sentidos: ${sent})` : " (stock INAF)") + `. Sin sábados, domingos ni feriados de config.json${hasta}.`;
+  const sent = (D.sentidos_rsd_inicio || []).map((s) => s.toLowerCase()).join(" y ");
+  $("#iRegla").textContent = `IFI desde: día hábil siguiente al fin de los ${D.plazo_descargos_dias} días hábiles de descargos a la última RSD de ${sent}` +
+    (D.archivo_documentos ? " (INAF documentos)" : " (stock INAF)") + `. RD desde: igual, con ${D.plazo_descargos_ifi_dias} días hábiles de descargos al IFI. ` +
+    `A más tardar, contando hacia atrás desde la fecha límite: la RD, ${D.dias_notificar_rd} días hábiles antes (para notificarla); el IFI, ${D.dias_notificar_rd + 1 + D.plazo_descargos_ifi_dias + D.dias_notificar_ifi} días hábiles antes ` +
+    `(${D.dias_notificar_ifi} para notificarlo, ${D.plazo_descargos_ifi_dias} de descargos, 1 para emitir la RD y ${D.dias_notificar_rd} para notificarla). Sin sábados, domingos ni feriados de config.json${hasta}.`;
 
-  const t = ini.length, nombre = IFI.grupo === "408" ? "Iniciados (408)" : "Iniciados (867)";
+  const t = ini.length, nombre = IFI.grupo === "408" ? "Iniciados (408)" : "Iniciados (867)", subTxt = SUB === "Todas" ? "" : " · " + SUB;
+  const rdYa = de(conIfi, "rd_ya"), rdPor = de(conIfi, "rd_por"), rdSin = conIfi.length - rdYa.length - rdPor.length;
   $("#kpisIfi").innerHTML = `
-    <div class="kpi"><div class="l">${nombre}${SUB === "Todas" ? "" : " · " + SUB}</div><div class="v">${t}</div>
-      <div class="s">esperan su IFI · ${sinProg(ini)} sin programar</div>
+    <div class="kpi"><div class="l">${nombre}${subTxt}</div><div class="v">${t}</div>
+      <div class="s">esperan su IFI · ${sin.length} sin notificación</div>
       <div class="b">${barraKpi([["#1baf7a", ya.length], ["#c4c4cc", por.length], ["#eb6834", sin.length]], t)}</div></div>
     <div class="kpi"><div class="l">Ya pueden emitir IFI</div><div class="v">${ya.length}<small>${pctTxt(ya.length, t)}</small></div>
       <div class="s">${sinProg(ya)} sin IFI programado</div><div class="b">${barraKpi([["#1baf7a", ya.length]], t)}</div></div>
     <div class="kpi"><div class="l">Se habilitan en 30 días</div><div class="v">${en30.length}<small>${pctTxt(en30.length, t)}</small></div>
       <div class="s">${sinProg(en30)} sin IFI programado · ${por.length - en30.length} después</div><div class="b">${barraKpi([["#c4c4cc", en30.length]], t)}</div></div>
-    <div class="kpi"><div class="l">Sin notificación en INAF</div><div class="v">${sin.length}<small>${pctTxt(sin.length, t)}</small></div>
-      <div class="s">su última RSD de inicio aún no tiene notificación</div><div class="b">${barraKpi([["#eb6834", sin.length]], t)}</div></div>`;
+    <div class="kpi"><div class="l">No llegan con el IFI</div><div class="v" style="color:#b42318">${noIni.length}<small>${pctTxt(noIni.length, t)}</small></div>
+      <div class="s">ya no alcanza el trámite hasta la RD</div><div class="b">${barraKpi([["#d03b3b", noIni.length]], t)}</div></div>
+    <div class="kpi"><div class="l">Con IFI${subTxt}</div><div class="v">${conIfi.length}</div>
+      <div class="s">${rdYa.length} ya pueden emitir RD · ${noRd.length} no llegan</div>
+      <div class="b">${barraKpi([["#1baf7a", rdYa.length], ["#c4c4cc", rdPor.length], ["#eb6834", rdSin]], conIfi.length)}</div></div>`;
 
   const aviso = $("#iTarde");
-  aviso.classList.toggle("oculto", !tarde.length);
-  if (tarde.length) {
-    aviso.innerHTML = `<span><b>${tarde.length === 1 ? "1 iniciado se habilita" : tarde.length + " iniciados se habilitan"} para IFI después de su fecha límite.</b> ` +
-      `El plazo de descargos termina cuando ya prescribió o caducó.</span><span class="der"><button class="btn chico" id="iVerTarde">Ver</button></span>`;
-    $("#iVerTarde").addEventListener("click", () => abrirTabla("Se habilitan para IFI después de su fecha límite", tarde, COLS_IFI));
+  aviso.classList.toggle("oculto", !noIni.length && !noRd.length);
+  if (noIni.length || noRd.length) {
+    const parte = (n, txt, id) => n ? `<span><b>${txt}</b> <button class="btn chico" id="${id}">Ver</button></span>` : "";
+    aviso.innerHTML = `<span>Contando ${D.plazo_descargos_ifi_dias} días hábiles de descargos al IFI y ${D.dias_notificar_ifi} + ${D.dias_notificar_rd} para notificar el IFI y la RD, ya no llegan a la fecha límite:</span>` +
+      parte(noIni.length, noIni.length === 1 ? "1 iniciado" : `${noIni.length} iniciados`, "iVerTarde") +
+      parte(noRd.length, noRd.length === 1 ? "1 con IFI" : `${noRd.length} con IFI`, "iVerTardeRd");
+    if (noIni.length) $("#iVerTarde").addEventListener("click", () => abrirTabla("Iniciados que ya no llegan con el IFI", noIni, COLS_IFI));
+    if (noRd.length) $("#iVerTardeRd").addEventListener("click", () => abrirTabla("Con IFI que ya no llegan con la RD", noRd, COLS_RD));
   }
 
   dibujarSemanasIfi(ini);
@@ -1633,11 +1686,15 @@ function dibujarIfi() {
 
 function pintarTablaIfi(U = universoIfi()) {
   const f = IFI.filtro;
-  let filas = f === "todos" ? U : U.filter((e) => e.categoria === "INI" && (f === "ini" || e._ifi === f));
-  // en "Todos los priorizados" el filtro de programacion solo mira a los iniciados (los demas no esperan IFI)
-  if ($("#iSinProg").checked) filas = filas.filter((e) => e.categoria !== "INI" || !e.programado);
+  const filtros = {
+    ini: (e) => e.categoria === "INI", ya: (e) => e._ifi === "ya", por: (e) => e._ifi === "por", sin: (e) => e._ifi === "sin",
+    nollega: (e) => e._tarde, rd: (e) => e.categoria === "IFI", todos: () => true,
+  };
+  let filas = U.filter(filtros[f]);
+  // solo sin programar: el producto que les toca (IFI a los iniciados, RD a los que tienen IFI)
+  if ($("#iSinProg").checked) filas = filas.filter((e) => !["INI", "IFI"].includes(e.categoria) || !e.programado);
   IFI.tabla.filas = filas;
-  IFI.tabla.cols = f === "todos" ? COLS_IFI_TODOS : COLS_IFI;
+  IFI.tabla.cols = f === "rd" ? COLS_RD : f === "todos" || f === "nollega" ? COLS_IFI_TODOS : COLS_IFI;
   pintarTabla(IFI.tabla);
 }
 
