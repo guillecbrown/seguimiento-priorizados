@@ -265,8 +265,8 @@
   </div>
   <div class="der">
     <span class="datos-al" id="dato"><i></i><span id="meta">Cargando…</span></span>
-    <button class="btn" id="btnExportar" title="Exporta a Excel todos los expedientes (408, nuevos y al corte) y, en otra hoja, los 867 originales">Exportar todo</button>
-    <button class="btn" id="btnDrive" title="Sube los árboles de 408 y 867 y el listado de expedientes a la hoja de Google (config.json > drive_hoja)">Subir al Drive</button>
+    <button class="btn" id="btnExportar" title="Exporta a Excel todos los expedientes (408, nuevos y al corte) y, en otra hoja, la segunda lista de priorizados">Exportar todo</button>
+    <button class="btn" id="btnDrive" title="Sube los dos árboles y el listado de expedientes a la hoja de Google (config.json > drive_hoja)">Subir al Drive</button>
     <button class="btn prim" id="btnActualizar" title="Vuelve a leer stock, programaciones y SIGED">Actualizar bases</button>
     <button class="btn prim oculto" id="btnCargar" title="Elige el datos_priorizados.json que genera la app. Se lee en este navegador, no se sube a ningún lado">Cargar datos</button>
     <input type="file" id="archivoDatos" accept=".json,application/json" class="oculto">
@@ -275,12 +275,12 @@
 <div class="subbar">
   <nav>
     <button data-vista="arbol" class="on">Árbol 408</button>
-    <button data-vista="arbol867">Árbol 867</button>
+    <button data-vista="arbol867">Árbol <span class="n2">872</span></button>
     <button data-vista="adicionales">Equipos adicionales</button>
     <button data-vista="ifi">Notificación e IFI</button>
     <button data-vista="linea">Línea de tiempo</button>
     <button data-vista="riesgo">Riesgo 408</button>
-    <button data-vista="riesgo867">Riesgo 867</button>
+    <button data-vista="riesgo867">Riesgo <span class="n2">872</span></button>
     <button data-vista="lista">Expedientes</button>
     <button data-vista="notas">Notas<span class="cuenta" id="nAvisos"></span></button>
   </nav>
@@ -361,7 +361,7 @@
     <div class="barra">
       <span>Sector</span>
       <div class="seg" id="filtroSectorAd"></div>
-      <span class="info">Expedientes de la lista de 867 que figuran como equipo adicional. La subdirección se elige arriba a la derecha.</span>
+      <span class="info">Expedientes de la lista de <span class="n2">872</span> que figuran como equipo adicional. La subdirección se elige arriba a la derecha.</span>
       <span class="der"><button class="btn chico" id="exportarAd">Exportar a Excel</button></span>
     </div>
     <div class="hoja kpis" id="kpisAd"></div>
@@ -410,7 +410,7 @@
     <div class="barra">
       <div class="seg" id="iGrupo">
         <button data-g="408" class="on">408 priorizados</button>
-        <button data-g="867">Priorizados 867</button>
+        <button data-g="867">Priorizados <span class="n2">872</span></button>
       </div>
       <label class="chk"><input type="checkbox" id="iNuevos" checked> Nuevos no previstos</label>
       <span class="info" id="iRegla"></span>
@@ -617,7 +617,12 @@ const LAYOUT = {
 const BW = 156, BH = 70, NIVEL_Y = [14, 130, 246, 362];   // medidas de caja
 const ANCHO_ARBOL = 1760, ALTO_ARBOL = 446;
 
-// los 867 y sus nuevos vienen aparte en el JSON: solo los usa su arbol
+// La segunda lista de priorizados se nombra por su numero de filas: nacio
+// con 867 y desde el 13/11/2026 trae 872. N2 es ese nombre y sale de los datos (nombre_867); lo usan los
+// textos de pantalla, los Excel y el Drive. Los identificadores internos (grupo "867", expedientes_867,
+// ids que terminan en 867) no cambian aunque la lista crezca.
+let N2 = "872";
+// la lista y sus nuevos vienen aparte en el JSON: solo los usa su arbol
 const todosExp = () => D.expedientes.concat(D.expedientes_867 || []);
 function universo(grupo) {
   const base = ["867", "NUEVO867", "AL_CORTE867"].includes(grupo) ? (D.expedientes_867 || []) : D.expedientes;
@@ -632,11 +637,11 @@ const ARBOL_408 = {
   nuevos: () => verNuevos, otros: () => verOtros, res: () => resaltado, serie: () => D.serie,
 };
 const ARBOL_867 = {
-  svg: "#svgArbol867", grupo: "867", nuevo: "NUEVO867", raiz: "Priorizados 867", de: "de los 867", kpis: "#kpis867",
+  svg: "#svgArbol867", grupo: "867", nuevo: "NUEVO867", get raiz() { return "Priorizados " + N2; }, get de() { return "de los " + N2; }, kpis: "#kpis867",
   ids: { nuevos: "#verNuevos867", otros: "#verOtros867", ley: "#leyNuevos867" },
   nuevos: () => verNuevos867, otros: () => verOtros867, res: () => resaltado867, serie: () => D.serie_867,
 };
-// Equipos adicionales: los de la lista de 867 cuyo equipo dice "EQUIPO ADICIONAL". Es el mismo arbol con un
+// Equipos adicionales: los de la segunda lista cuyo equipo dice "EQUIPO ADICIONAL". Es el mismo arbol con un
 // filtro propio por sector (el de subdireccion es el de arriba). No tiene nuevos no previstos, que no llevan
 // equipo, ni cambio en 7 dias, porque el historial se guarda por subdireccion y no por equipo.
 let SECTOR_AD = "";           // "" = todos los sectores
@@ -651,7 +656,7 @@ const ARBOL_AD = {
   caja: () => SECTOR_AD ? corto(sectorTxt(SECTOR_AD), 20) : SUB === "Todas" ? "Equipos adicionales" : "Adicionales · " + SUB,
   sufijo: () => (SUB === "Todas" ? "" : " · " + SUB) + (SECTOR_AD ? " · " + sectorTxt(SECTOR_AD) : ""),
   titulo: () => "Equipos adicionales" + (SECTOR_AD ? " · " + sectorTxt(SECTOR_AD) : ""),
-  nota: (n) => `${pctTxt(n, universo("867").length)} de los 867${SUB === "Todas" ? "" : " de " + SUB}`,
+  nota: (n) => `${pctTxt(n, universo("867").length)} de los ${N2}${SUB === "Todas" ? "" : " de " + SUB}`,
 };
 // universo de un arbol: su grupo (o sus nuevos) con el filtro de subdireccion y, si lo tiene, el propio
 const uniArbol = (A, grupo = A.grupo) => A.filtro ? universo(grupo).filter(A.filtro) : universo(grupo);
@@ -888,7 +893,7 @@ function dibujarLineas() {
 const COLS = [
   ["n", "#", (e, i) => i + 1, "num"],
   ["expediente", "Expediente", (e) => e.expediente, "exp"],
-  ["grupo", "Grupo", (e) => e.grupo === "408" ? `408 · ${e.id408}` : e.grupo === "867" ? `867 · ${e.id867}` + (e.en_408 ? " · en 408" : "") : e.grupo === "NUEVO" ? "Nuevo" : e.grupo === "NUEVO867" ? "Nuevo 867" : e.grupo === "AL_CORTE867" ? "Al corte 867" : "Al corte"],
+  ["grupo", "Grupo", (e) => e.grupo === "408" ? `408 · ${e.id408}` : e.grupo === "867" ? `${N2} · ${e.id867}` + (e.en_408 ? " · en 408" : "") : e.grupo === "NUEVO" ? "Nuevo" : e.grupo === "NUEVO867" ? "Nuevo " + N2 : e.grupo === "AL_CORTE867" ? "Al corte " + N2 : "Al corte"],
   ["subdireccion", "Subd.", (e) => e.subdireccion],
   ["sector", "Sector", (e) => e.sector],
   ["administrado", "Administrado", (e) => e.administrado],
@@ -940,7 +945,8 @@ function coincide(e, q) {
   return !n || textoBusqueda(e).includes(n);
 }
 
-const NOMBRE_GRUPO = { "408": "408 priorizados", NUEVO: "Nuevos no previstos", "867": "Priorizados 867", NUEVO867: "Nuevos no previstos (867)" };
+// los dos de la segunda lista los pone rotular(), con su nombre de hoy
+const NOMBRE_GRUPO = { "408": "408 priorizados", NUEVO: "Nuevos no previstos", "867": "", NUEVO867: "" };
 function abrirPanel(nodo, grupo, A) {
   const filas = (A ? uniArbol(A, grupo) : universo(grupo)).filter(NODOS[nodo].f);
   const raiz = A && A.titulo ? A.titulo() : NOMBRE_GRUPO[grupo];
@@ -1061,14 +1067,14 @@ function abrirFicha(e) {
   const f = $("#ficha");
   f.style.setProperty("--et", ETAPA_COLOR[e.categoria] || (NODOS.conc.f(e) ? "#1d6b35" : "#d4d4d8"));
   const fila = (n, v) => (v === "" || v === null || v === undefined) ? "" : `<dt>${n}</dt><dd>${escapar(v)}</dd>`;
-  const grupo = e.grupo === "408" ? `De los 408 · ID ${e.id408}` : e.grupo === "867" ? `De los 867 · N.° ${e.id867} · ${(e.equipo || "").toLowerCase()}${e.en_408 ? " · también en los 408" : ""}`
+  const grupo = e.grupo === "408" ? `De los 408 · ID ${e.id408}` : e.grupo === "867" ? `De los ${N2} · N.° ${e.id867} · ${(e.equipo || "").toLowerCase()}${e.en_408 ? " · también en los 408" : ""}`
     : e.grupo === "NUEVO" ? `Nuevo no previsto · detectado el ${fmt(e.primera_vez)}`
-    : e.grupo === "NUEVO867" ? `Nuevo no previsto (867) · detectado el ${fmt(e.primera_vez)}`
-    : e.grupo === "AL_CORTE867" ? "Al corte, fuera de los 867" : "Al corte, fuera de los 408";
+    : e.grupo === "NUEVO867" ? `Nuevo no previsto (${N2}) · detectado el ${fmt(e.primera_vez)}`
+    : e.grupo === "AL_CORTE867" ? "Al corte, fuera de los " + N2 : "Al corte, fuera de los 408";
   const prog = e.producto_esperado ? `${e.producto_esperado}: ${e.programado ? "sí está programado" : "no está programado"}` : "";
   const ubic = hojaDe(e)
     ? `<span>En el árbol: <b>${escapar(caminoTexto(e))}</b></span> <button class="btn chico" id="fVerArbol" style="margin-left:auto">Ver en el árbol</button>`
-    : `No se dibuja en el árbol: cumplía el criterio al corte pero no está en los ${e.grupo === "AL_CORTE867" ? "867" : "408"}.`;
+    : `No se dibuja en el árbol: cumplía el criterio al corte pero no está en los ${e.grupo === "AL_CORTE867" ? N2 : "408"}.`;
   f.innerHTML = `
     <div class="cab">
       <div><h2>${escapar(e.expediente)}</h2><div class="sub">${escapar(grupo)} · ${escapar(e.subdireccion)}</div></div>
@@ -1100,7 +1106,7 @@ function abrirFicha(e) {
       ${fila("Producto que le toca", prog)}
       ${e.programacion.length ? e.programacion.map((p, i) => fila(i ? "" : "Programado", p)).join("") : fila("Programado", "nada en la programación del mes")}
       ${e.grupo === "408" ? `<h3>En la lista de 408</h3>${fila("ID", e.id408)}${fila("Mes de riesgo (lista)", e.mes_riesgo_lista)}${fila("Estado en la lista", e.estado_lista)}` : ""}
-      ${e.grupo === "867" ? `<h3>En la lista de 867</h3>${fila("N.°", e.id867)}${fila("Equipo", e.equipo)}${fila("Estado en la lista", e.estado_lista)}` : ""}
+      ${e.grupo === "867" ? `<h3>En la lista de ${N2}</h3>${fila("N.°", e.id867)}${fila("Equipo", e.equipo)}${fila("Estado en la lista", e.estado_lista)}` : ""}
     </dl>`;
   $("#velo2").classList.remove("oculto");
   f.classList.remove("oculto");
@@ -1114,7 +1120,7 @@ function abrirFicha(e) {
   });
 }
 
-// marca en el arbol de 867 la caja de un expediente (desde su ficha)
+// marca en el arbol de la segunda lista la caja de un expediente (desde su ficha)
 function ubicarEn867(e) {
   const r = $("#aResultado867"), hoja = hojaDe(e);
   if (SUB !== "Todas" && e.subdireccion !== SUB) cambiarSub("Todas");
@@ -1123,7 +1129,7 @@ function ubicarEn867(e) {
   resaltado867 = { e, hoja };
   dibujarArbol(ARBOL_867);
   r.classList.remove("oculto");
-  const quien = e.grupo === "867" ? `N.° ${escapar(e.id867)} de los 867` : "nuevo no previsto";
+  const quien = e.grupo === "867" ? `N.° ${escapar(e.id867)} de los ${N2}` : "nuevo no previsto";
   r.innerHTML = `<span><b>${escapar(e.expediente.replace("-OEFA/DFAI/PAS", ""))}</b>, ${quien}, ${escapar(e.subdireccion)}, está en <span class="camino">${escapar(caminoTexto(e))}</span>` +
     (e.grupo === "NUEVO867" ? " (etiqueta +n)" : "") + "</span>" +
     ` <span class="der"><button class="btn chico" id="aFicha867">Ver ficha</button><button class="btn chico" id="aQuitar867">Quitar</button></span>`;
@@ -1140,7 +1146,7 @@ function cerrarFicha() {
 // ------------------------------------------------------------ pestana Expedientes
 // Cada filtro tiene una o mas secciones; dentro de una seccion vale cualquiera de lo marcado y entre
 // filtros (o secciones) deben cumplirse todos. Sin nada marcado, el filtro no filtra.
-const GRUPO_TXT = { "408": "408", NUEVO: "Nuevos 408", "867": "867", NUEVO867: "Nuevos 867" };
+const GRUPO_TXT = { "408": "408", NUEVO: "Nuevos 408", "867": "", NUEVO867: "" };   // los dos ultimos: rotular()
 const riesgoDe = (e) => PEND.includes(e.categoria) ? semaforo(e) : "conc";
 function riesgoTxt(v) {
   const [r, a] = D.semaforo_dias || [30, 60];
@@ -1359,7 +1365,7 @@ function dibujarNotas() {
       <li><b>Estado:</b> columna "Estado" del stock INAF (${escapar(D.archivo_stock)}), agrupada según <code>config.json</code>.</li>
       <li><b>Fecha de riesgo:</b> la más temprana entre prescripción y caducidad.</li>
       <li><b>Nuevos no previstos:</b> pendientes con fecha de riesgo entre ${fmt(D.corte_lista)} y ${fmt(D.riesgo_hasta)} que no están en los 408 y que no cumplían ese criterio en el primer stock del corte. Una vez detectado, un nuevo se sigue aunque luego se concluya. Historial: ${D.stocks_en_historial} stocks (uno por día).</li>
-      ${D.corte_867 ? `<li><b>Nuevos no previstos del árbol de 867:</b> pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} que no cumplían ese criterio en el stock del ${fmt(D.corte_867)}, con el que se armó la lista. No cuentan los de la lista (tampoco por su informe de supervisión, para las filas sin expediente) ni los que ya sigue el árbol de 408.</li>` : ""}
+      ${D.corte_867 ? `<li><b>Nuevos no previstos del árbol de ${N2}:</b> pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} que no cumplían ese criterio en el stock del ${fmt(D.corte_867)}, con el que se armó la lista. No cuentan los de la lista (tampoco por su informe de supervisión, para las filas sin expediente) ni los que ya sigue el árbol de 408.</li>` : ""}
       <li><b>Programado:</b> en la programación de ${D.mes_programacion} tiene, sin cancelar, el producto que le toca: RSD si está en análisis de inicio, IFI si está iniciado, RD si ya tiene IFI o si tiene nulidad (en la programación de DFAI cuentan como RD los productos RD-* y NULIDAD).</li>
       <li><b>PAS con nulidad:</b> rama propia porque la base no dice si la nulidad es de la responsabilidad (puede prescribir) o solo de la multa (ya no prescribe). Por eso se mantiene en el criterio de riesgo.</li>
     </ul>
@@ -1376,17 +1382,17 @@ function dibujarNotas() {
   $("#verAlCorte").addEventListener("click", () => abrirTabla("Al corte, fuera de los 408", alCorte));
   const n867 = notas867.listas;
   if (n867) {
-    $("#verSiged867").addEventListener("click", () => abrirTabla("867 · avanzan con documentos firmados en SIGED", n867.conSiged));
-    $("#verSinSentido867").addEventListener("click", () => abrirTabla("867 · RSD firmada en SIGED sin sentido confirmado", n867.sinSentido));
-    $("#verSinExp867").addEventListener("click", () => abrirTabla("867 · filas sin expediente", n867.sinExp));
-    $("#verEn408").addEventListener("click", () => abrirTabla("867 · también en los 408", n867.en408));
-    $("#verAlCorte867").addEventListener("click", () => abrirTabla("Al corte, fuera de los 867", n867.alCorte));
+    $("#verSiged867").addEventListener("click", () => abrirTabla(N2 + " · avanzan con documentos firmados en SIGED", n867.conSiged));
+    $("#verSinSentido867").addEventListener("click", () => abrirTabla(N2 + " · RSD firmada en SIGED sin sentido confirmado", n867.sinSentido));
+    $("#verSinExp867").addEventListener("click", () => abrirTabla(N2 + " · filas sin expediente", n867.sinExp));
+    $("#verEn408").addEventListener("click", () => abrirTabla(N2 + " · también en los 408", n867.en408));
+    $("#verAlCorte867").addEventListener("click", () => abrirTabla("Al corte, fuera de los " + N2, n867.alCorte));
   }
   $("#verSiged").addEventListener("click", () => abrirTabla("Avanzan con documentos firmados en SIGED", conSiged));
   $("#verSinSentido").addEventListener("click", () => abrirTabla("RSD firmada en SIGED sin sentido confirmado", sinSentido));
 }
 
-// seccion de Notas sobre el arbol de 867; deja sus listas en notas867.listas para los botones
+// seccion de Notas sobre el arbol de la segunda lista; deja sus listas en notas867.listas para los botones
 function notas867() {
   notas867.listas = null;
   if (!D.expedientes_867 || !D.expedientes_867.length) return "";
@@ -1398,14 +1404,14 @@ function notas867() {
   const equipos = EQUIPOS.map(([c, t]) => `${l.filter((e) => e.equipo === c).length} del ${t}`).join(" y ");
   const sub = SUB === "Todas" ? "" : ` (solo ${SUB})`;
   return `
-    <h3>Árbol de 867${sub}</h3>
+    <h3>Árbol de ${N2}${sub}</h3>
     <ul>
       <li><b>Lista:</b> ${l.length} expedientes (${equipos}), cruzados con el stock INAF por expediente. ${L.en408.length} también están en los 408. <button class="btn chico" id="verEn408">Ver</button></li>
       <li><b>Filas sin expediente (${L.sinExp.length}):</b> se busca su informe de supervisión en el stock; si no está, cuentan con la etapa más reciente que trae la lista y no entran a la curva diaria. <button class="btn chico" id="verSinExp867">Ver</button></li>
       <li><b>Nuevos no previstos:</b> ${nue.length}${D.corte_867 ? `, pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} detectados después del stock del ${fmt(D.corte_867)}` : ""}.</li>
       <li><b>Estado con SIGED:</b> ${L.conSiged.length} avanzan y ${L.sinSentido.length} tienen una RSD sin sentido confirmado (lista y nuevos, misma regla que en los 408).
         <button class="btn chico" id="verSiged867">Ver los que avanzan</button> <button class="btn chico" id="verSinSentido867">Ver RSD sin sentido</button></li>
-      <li><b>Al corte, fuera de los 867 (${alCorte.length}):</b> cumplían el criterio en el stock del ${fmt(D.corte_867)} pero no están en la lista; no se cuentan como nuevos. <button class="btn chico" id="verAlCorte867">Ver expedientes</button></li>
+      <li><b>Al corte, fuera de los ${N2} (${alCorte.length}):</b> cumplían el criterio en el stock del ${fmt(D.corte_867)} pero no están en la lista; no se cuentan como nuevos. <button class="btn chico" id="verAlCorte867">Ver expedientes</button></li>
     </ul>`;
 }
 
@@ -1558,7 +1564,7 @@ const COLS_IFI_TODOS = [...C_EXP,
   C_LIMITE, C_VENTANA, C_PROG,
 ];
 const EXPORT_COLS_IFI = [
-  ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 867", "id867"], ["Subdirección", "subdireccion"], ["Sector", "sector"],
+  ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 872", "id867"], ["Subdirección", "subdireccion"], ["Sector", "sector"],
   ["Administrado", "administrado"], ["Jefe de equipo", "jefe"], ["Estado INAF", "estado_inaf"], ["RSD de inicio", "rsd_inicio"],
   ["Última RSD de inicio", "rsd_notificada"], ["Sentido de esa RSD", "rsd_sentido"], ["Notificación del inicio", "notificacion"],
   ["Descargos a la RSD hasta", "descargos_vence"], ["IFI desde", "ifi_desde"], ["IFI a más tardar", "ifi_mas_tardar"],
@@ -1653,7 +1659,7 @@ function dibujarIfi() {
     `A más tardar, contando hacia atrás desde la fecha límite: la RD, ${D.dias_notificar_rd} días hábiles antes (para notificarla); el IFI, ${D.dias_notificar_rd + 1 + D.plazo_descargos_ifi_dias + D.dias_notificar_ifi} días hábiles antes ` +
     `(${D.dias_notificar_ifi} para notificarlo, ${D.plazo_descargos_ifi_dias} de descargos, 1 para emitir la RD y ${D.dias_notificar_rd} para notificarla). Sin sábados, domingos ni feriados de config.json${hasta}.`;
 
-  const t = ini.length, nombre = IFI.grupo === "408" ? "Iniciados (408)" : "Iniciados (867)", subTxt = SUB === "Todas" ? "" : " · " + SUB;
+  const t = ini.length, nombre = IFI.grupo === "408" ? "Iniciados (408)" : `Iniciados (${N2})`, subTxt = SUB === "Todas" ? "" : " · " + SUB;
   const rdYa = de(conIfi, "rd_ya"), rdPor = de(conIfi, "rd_por"), rdSin = conIfi.length - rdYa.length - rdPor.length;
   $("#kpisIfi").innerHTML = `
     <div class="kpi"><div class="l">${nombre}${subTxt}</div><div class="v">${t}</div>
@@ -1836,7 +1842,7 @@ function dibujarCurva(R) {
   const subs = SUB === "Todas" ? D.linea.subdirecciones : [SUB];
   const t0 = diaDe(R.desde()), t1 = diaDe(R.hasta()), hoy = diaDe(D.corte_stock);
   const val = (foto, c) => subs.reduce((s, sb) => s + ((foto.cuenta[sb] && foto.cuenta[sb][c]) ? foto.cuenta[sb][c][0] + (conN ? foto.cuenta[sb][c][1] : 0) : 0), 0);
-  // desde el corte del grupo (el historial de los 867 empieza antes que su lista)
+  // desde el corte del grupo (el historial de la segunda lista empieza antes que ella)
   const serie = (R.serie() || []).filter((f) => diaDe(f.fecha) >= t0).map((f) => {
     const v = { t: diaDe(f.fecha) };
     ETAPAS.forEach((c) => { v[c] = val(f, c); });
@@ -1888,7 +1894,22 @@ const MESES_TXT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set"
 
 
 // ------------------------------------------------------------ general
+// pone el nombre de hoy de la segunda lista (N2) en pestanas, botones, filtros y cabeceras de Excel
+function rotular() {
+  const filas = (D.expedientes_867 || []).filter((e) => e.grupo === "867").length;
+  N2 = D.nombre_867 || (filas ? String(filas) : N2);
+  document.querySelectorAll(".n2").forEach((s) => { s.textContent = N2; });
+  $("#btnExportar").title = `Exporta a Excel todos los expedientes (408, nuevos y al corte) y, en otra hoja, los ${N2} originales`;
+  $("#btnDrive").title = `Sube los árboles de 408 y ${N2} y el listado de expedientes a la hoja de Google (config.json > drive_hoja)`;
+  NOMBRE_GRUPO["867"] = "Priorizados " + N2;
+  NOMBRE_GRUPO.NUEVO867 = `Nuevos no previstos (${N2})`;
+  GRUPO_TXT["867"] = N2;
+  GRUPO_TXT.NUEVO867 = "Nuevos " + N2;
+  for (const cols of [EXPORT_COLS, EXPORT_COLS_867, EXPORT_COLS_IFI]) for (const c of cols) if (c[1] === "id867") c[0] = "N.° " + N2;
+}
+
 function pintarTodo() {
+  rotular();
   const movidos = D.expedientes.filter((e) => e.grupo !== "AL_CORTE" && e.siged && e.siged.length).length;
   // punto verde si el stock es de hoy; ambar si es de otro dia
   const h = new Date(), hoy = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}-${String(h.getDate()).padStart(2, "0")}`;
@@ -1969,7 +1990,7 @@ function dibujarAdicionales() {
   dibujarArbol(ARBOL_AD);
 }
 
-// texto por equipo bajo el arbol de 867; sigue el filtro de subdireccion y el selector INAF / INAF + SIGED
+// texto por equipo bajo el arbol de la segunda lista; sigue el filtro de subdireccion y el selector INAF / INAF + SIGED
 const EQUIPOS = [["EQUIPO REGULAR", "equipo regular"], ["EQUIPO ADICIONAL", "equipo adicional"]];
 function dibujarResumen867() {
   const l = universo("867");
@@ -1982,7 +2003,7 @@ function dibujarResumen867() {
   $("#resumen867").innerHTML = parrafos.join("") +
     `<div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "siged" ? ` + documentos firmados en SIGED al ${fmt(D.siged_corte)}` : ""})${SUB === "Todas" ? "" : `, solo ${SUB}`}. ` +
     `Iniciados = iniciados + iniciados con IFI + PAS con nulidad; concluidos = caja Concluidos (con RD, no inicio y otros). ` +
-    `No incluye los nuevos no previstos, que no tienen equipo.${sinEquipo ? ` ${sinEquipo} de los 867 no tienen equipo en la lista.` : ""}</div>`;
+    `No incluye los nuevos no previstos, que no tienen equipo.${sinEquipo ? ` ${sinEquipo} de los ${N2} no tienen equipo en la lista.` : ""}</div>`;
 }
 
 // texto para el reporte; siempre sobre los 408 de toda la DFAI, sin importar el filtro
@@ -2080,7 +2101,7 @@ async function cargar() {
 function sinDatos(si) {
   $("#vacio").classList.toggle("oculto", !si);
   $("main").classList.toggle("oculto", si);
-  $(".subbar").classList.toggle("oculto", si);   // sin datos tampoco se ven las pestanas (408, 867)
+  $(".subbar").classList.toggle("oculto", si);   // sin datos tampoco se ven las pestanas de los arboles
 }
 
 async function cargarArchivo(f) {
@@ -2176,7 +2197,7 @@ async function actualizar() {
 }
 
 const EXPORT_COLS = [
-  ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 867", "id867"], ["Equipo", "equipo"], ["Subdirección", "subdireccion"],
+  ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 872", "id867"], ["Equipo", "equipo"], ["Subdirección", "subdireccion"],
   ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
   ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
   ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
@@ -2187,9 +2208,9 @@ const EXPORT_COLS = [
   ["Programación del mes", "programacion"], ["Mes de riesgo (lista)", "mes_riesgo_lista"], ["Estado en la lista", "estado_lista"],
   ["Detectado el", "primera_vez"],
 ];
-// hoja de los 867: su numero en la lista, su estado y la caja del arbol en que esta
+// hoja de la segunda lista: su numero en ella, su estado y la caja del arbol en que esta
 const EXPORT_COLS_867 = [
-  ["N.° 867", "id867"], ["Grupo", "grupo"], ["Equipo", "equipo"], ["Expediente", "expediente"], ["También en los 408", "en_408"], ["Subdirección", "subdireccion"],
+  ["N.° 872", "id867"], ["Grupo", "grupo"], ["Equipo", "equipo"], ["Expediente", "expediente"], ["También en los 408", "en_408"], ["Subdirección", "subdireccion"],
   ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
   ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
   ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
@@ -2229,7 +2250,7 @@ function datosExport(filas, cols) {
     if (k === "siged") v = (v || []).map((d) => `${d.tipo} ${d.numero} (${fmt(d.fecha)})`).join(" | ");
     if (k === "programado") v = e.producto_esperado ? (v ? "SÍ" : "NO") : "";
     if (k === "programacion") v = v.join(" | ");
-    if (k === "grupo") v = { "408": "408", NUEVO: "NUEVO", "867": "867", NUEVO867: "NUEVO 867", AL_CORTE867: "AL CORTE 867" }[v] || "AL CORTE";
+    if (k === "grupo") v = { "408": "408", NUEVO: "NUEVO", "867": N2, NUEVO867: "NUEVO " + N2, AL_CORTE867: "AL CORTE " + N2 }[v] || "AL CORTE";
     if (k === "en_408") v = v ? "SÍ" : "NO";
     if (k === "_caja") { const h = hojaDe(e); v = h ? caminoDe(h).slice(1).map(nombreNodo).join(" › ") : ""; }
     return v ?? "";
@@ -2266,7 +2287,7 @@ async function guardarImagen(id, nombre) {
 }
 
 // ------------------------------------------------------------ subir al Drive
-// Tres pestanas: el arbol de 408 y el de 867 como cuadros (caja, total, % y por subdireccion) y el
+// Tres pestanas: el arbol de 408 y el de la segunda lista como cuadros (caja, total, % y por subdireccion) y el
 // listado de Expedientes. Siempre de toda la DFAI y sin los filtros de la pestana Expedientes; el
 // estado sigue el selector INAF / INAF + SIGED.
 const deGrupo = (g) => (["867", "NUEVO867", "AL_CORTE867"].includes(g) ? D.expedientes_867 || [] : D.expedientes).filter((e) => e.grupo === g);
@@ -2320,7 +2341,7 @@ function hojasDrive() {
   a408.est(a408.filas.length - 1, 0, 1, { negrita: true });
   document.querySelectorAll("#resumen p").forEach((p) => a408.filas.push([p.textContent.trim()]));
 
-  const a867 = cuadroArbol(ARBOL_867, "Árbol de estados · Priorizados 867");
+  const a867 = cuadroArbol(ARBOL_867, "Árbol de estados · Priorizados " + N2);
   const l867 = deGrupo("867");
   a867.filas.push([], ["Por equipo", "Expedientes", "En análisis de inicio", "Iniciados", "Concluidos"]);
   a867.est(a867.filas.length - 1, 0, 5, { negrita: true, fondo: "#18181b", color: "#ffffff" });
@@ -2337,7 +2358,8 @@ function hojasDrive() {
   return [
     // ancho fijo: la columna A tiene titulos y parrafos largos que no deben ensancharla
     { nombre: "Árbol 408", filas: a408.filas, estilos: a408.estilos, anchos: ANCHOS_ARBOL },
-    { nombre: "Árbol 867", filas: a867.filas, estilos: a867.estilos, anchos: ANCHOS_ARBOL },
+    // familia: si en la hoja aun esta la pestana con el numero anterior ("Árbol 867"), se renombra
+    { nombre: "Árbol " + N2, familia: "Árbol ", filas: a867.filas, estilos: a867.estilos, anchos: ANCHOS_ARBOL },
     { nombre: "Expedientes", filas: exp, congelar: 1,
       estilos: [{ f0: 0, f1: 1, c0: 0, c1: EXPORT_COLS_DRIVE.length, negrita: true, fondo: "#18181b", color: "#ffffff" }] },
   ];
@@ -2351,7 +2373,7 @@ async function subirDrive() {
   aviso("Subiendo los cuadros a Google Sheets…");
   try {
     await api("subir_drive", { hojas: hojasDrive() });
-    aviso("Subido a Google Sheets: Árbol 408, Árbol 867 y Expedientes.", 5000);
+    aviso(`Subido a Google Sheets: Árbol 408, Árbol ${N2} y Expedientes.`, 5000);
   } catch (err) {
     aviso("No se pudo subir al Drive: " + err, 10000);
   } finally {
@@ -2395,7 +2417,7 @@ $("#verOtros867").addEventListener("change", (ev) => {
   verOtros867 = ev.target.checked;
   if (D) dibujarArbol(ARBOL_867);
 });
-$("#exportar867").addEventListener("click", () => D && exportar(filas867(), "originales_867_" + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], "867 originales", EXPORT_COLS_867));
+$("#exportar867").addEventListener("click", () => D && exportar(filas867(), `originales_${N2}_` + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], N2 + " originales", EXPORT_COLS_867));
 $("#iGrupo").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-g]");
   if (!b) return;
@@ -2413,7 +2435,7 @@ $("#iFiltro").addEventListener("click", (ev) => {
 $("#iNuevos").addEventListener("change", () => D && dibujarIfi());
 $("#iSinProg").addEventListener("change", () => D && pintarTablaIfi());
 $("#iExportar").addEventListener("click", () => D && exportar(filasVisibles(IFI.tabla),
-  `notificacion_ifi_${IFI.grupo}_` + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], "Notificación e IFI", EXPORT_COLS_IFI));
+  `notificacion_ifi_${IFI.grupo === "867" ? N2 : IFI.grupo}_` + (SUB === "Todas" ? "" : SUB + "_") + hoyTxt(), [], "Notificación e IFI", EXPORT_COLS_IFI));
 const archivoSectorAd = () => SECTOR_AD ? SECTOR_AD.toLowerCase().replace(/\s+/g, "_") + "_" : "";
 $("#filtroSectorAd").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-sec]");
@@ -2457,10 +2479,10 @@ for (const R of [RIESGO_408, RIESGO_867]) {
     rid(R, "rFiltro").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.f === f));
     if (D) dibujarRiesgo(R);
   });
-  rid(R, "rExportar").addEventListener("click", () => D && exportar(filasVisibles(R.alerta), (R.suf ? "priorizados_867_alerta_" : "priorizados_alerta_") + hoyTxt()));
+  rid(R, "rExportar").addEventListener("click", () => D && exportar(filasVisibles(R.alerta), (R.suf ? `priorizados_${N2}_alerta_` : "priorizados_alerta_") + hoyTxt()));
 }
 $("#btnExportar").addEventListener("click", () => D && exportar(D.expedientes.filter((e) => SUB === "Todas" || e.subdireccion === SUB), "priorizados_" + hoyTxt(),
-  [{ nombre: "867 originales", filas: filas867(), cols: EXPORT_COLS_867 }]));
+  [{ nombre: N2 + " originales", filas: filas867(), cols: EXPORT_COLS_867 }]));
 $("#pExportar").addEventListener("click", () => exportar(filasVisibles(panel), "priorizados_detalle_" + hoyTxt()));
 $("#pCerrar").addEventListener("click", cerrarPanel);
 $("#velo").addEventListener("click", cerrarPanel);
@@ -2478,8 +2500,8 @@ $("#pBuscar").addEventListener("input", () => pintarTabla(panel));
 document.querySelectorAll("[data-imagen]").forEach((b) => b.addEventListener("click", () => {
   if (!D) return;
   const id = b.dataset.imagen;
-  const nombre = { lineas: "linea_tiempo_", gSemanas: "vencen_por_semana_", gCurva: "curva_avance_", svgArbol867: "arbol_867_",
-    svgArbolAd: "arbol_equipos_adicionales_", gIfi: "ifi_por_semana_", gSemanas867: "vencen_por_semana_867_", gCurva867: "curva_avance_867_" }[id] || "arbol_priorizados_";
+  const nombre = { lineas: "linea_tiempo_", gSemanas: "vencen_por_semana_", gCurva: "curva_avance_", svgArbol867: `arbol_${N2}_`,
+    svgArbolAd: "arbol_equipos_adicionales_", gIfi: "ifi_por_semana_", gSemanas867: `vencen_por_semana_${N2}_`, gCurva867: `curva_avance_${N2}_` }[id] || "arbol_priorizados_";
   guardarImagen(id, nombre + (SUB === "Todas" ? "" : SUB + "_") + (id === "svgArbolAd" ? archivoSectorAd() : "") + hoyTxt());
 }));
 $("#nuevasActualizar").addEventListener("click", actualizar);
