@@ -1407,6 +1407,7 @@ function notas867() {
     <h3>Árbol de ${N2}${sub}</h3>
     <ul>
       <li><b>Lista:</b> ${l.length} expedientes (${equipos}), cruzados con el stock INAF por expediente. ${L.en408.length} también están en los 408. <button class="btn chico" id="verEn408">Ver</button></li>
+      ${(D.sacados_867 || []).length ? `<li><b>Sacados de la lista (${D.sacados_867.length}):</b> ${D.sacados_867.map((s) => escapar(`N.° ${s.num}, ${s.expediente ? s.expediente.replace("-OEFA/DFAI/PAS", "") : "informe " + s.informe}`)).join("; ")}. Siguen en el Excel de la base, pero no se cuentan ni vuelven como nuevos (config.json > excluir_867).</li>` : ""}
       <li><b>Filas sin expediente (${L.sinExp.length}):</b> se busca su informe de supervisión en el stock; si no está, cuentan con la etapa más reciente que trae la lista y no entran a la curva diaria. <button class="btn chico" id="verSinExp867">Ver</button></li>
       <li><b>Nuevos no previstos:</b> ${nue.length}${D.corte_867 ? `, pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} detectados después del stock del ${fmt(D.corte_867)}` : ""}.</li>
       <li><b>Estado con SIGED:</b> ${L.conSiged.length} avanzan y ${L.sinSentido.length} tienen una RSD sin sentido confirmado (lista y nuevos, misma regla que en los 408).
