@@ -129,6 +129,7 @@
   .chip.nuevo { border-style: dashed; color: var(--tenue); }
   .chip.si { color: var(--ok); border-color: #cfe5d6; background: #f3f8f4; }
   .chip.no { color: var(--alerta); border-color: #f5d0bd; background: #fdf4ef; }
+  .chip.firma-atras { color: #b42318; border-color: #f5c6c0; background: #fef3f2; }
   .chip.siged { color: #6e40c9; border-color: #e0d4f7; background: #f7f3fd; }
   .tag { display: inline-block; font-size: 11.5px; color: var(--suave); background: var(--gris); border-radius: 6px; padding: 1px 6px; margin: 1px 4px 1px 0; }
   .vencido { color: #b42318; font-weight: 600; }
@@ -285,9 +286,9 @@
     <button data-vista="notas">Notas<span class="cuenta" id="nAvisos"></span></button>
   </nav>
   <div class="der">
-    <div class="seg" id="filtroModo" title="INAF + SIGED: avanza el estado con los documentos ya firmados en SIGED que INAF aún no registra">
-      <button data-m="inaf" class="on">Estado INAF</button>
-      <button data-m="siged">INAF + SIGED</button>
+    <div class="seg" id="filtroModo" title="INAF: solo lo que dice INAF. INAF firmado: lo que INAF registra y ya está firmado; si falta la firma, el expediente vuelve a la etapa anterior">
+      <button data-m="inaf" class="on">INAF</button>
+      <button data-m="firmado">INAF firmado</button>
     </div>
     <div class="seg" id="filtroSub"></div>
   </div>
@@ -561,7 +562,7 @@ let SUB = "Todas";
 let verOtros = true;          // caja "Otros" bajo Concluidos (boton Ocultar/Mostrar)
 let verNuevos = true;         // cajas grises de nuevos no previstos (boton Ocultar/Mostrar)
 let resaltado = null;         // expediente buscado en el arbol: { e, hoja }
-let MODO = "inaf";            // "inaf" o "siged" (INAF + documentos firmados en SIGED)
+let MODO = "inaf";            // "inaf" (solo INAF) o "firmado" (lo registrado en INAF que ya esta firmado)
 const SUBS = ["Todas", "SFEM", "SFAP", "SFIS"];
 const NS = "http://www.w3.org/2000/svg";
 const $ = (s) => document.querySelector(s);
@@ -1001,9 +1002,9 @@ function pintarTabla(est) {
     if (k === "dias_limite" && typeof e.dias_limite === "number" && e.dias_limite < 0) clase += " vencido";
     if (k === "grupo" && e.grupo !== "408") v = `<span class="chip nuevo">${v}</span>`;
     else if (k === "dias_limite" && v !== "") v = `<span class="dias ${semaforo(e)}" title="${SEM_TXT[semaforo(e)]}">${v}</span>`;
-    else if (k === "categoria" && movidoPorSiged(e)) v = `${escapar(v)} <span class="chip siged" title="${escapar(e.siged.map((d) => d.numero).join(" | "))}">SIGED</span>`;
-    else if (k === "estado_inaf" && movidoPorSiged(e)) v = `${escapar(v)} <span class="chip siged" title="${escapar(e.siged.map((d) => d.numero).join(" | "))}">SIGED: ${e.siged.map((d) => d.tipo).join(" + ")} firmado</span>`;
-    else if (k === "estado_inaf" && MODO === "siged" && e.siged_nota) v = `${escapar(v)} <span class="chip" title="${escapar(e.siged_nota)}">RSD sin sentido</span>`;
+    else if (k === "categoria" && movidoPorFirma(e)) v = `${escapar(v)} ${chipFirma(e)}`;
+    else if (k === "estado_inaf" && movidoPorFirma(e)) v = `${escapar(v)} ${chipFirma(e)}`;
+    else if (k === "estado_inaf" && e.sin_rd) v = `${escapar(v)} <span class="chip" title="${SIN_RD_TXT}">sin RD</span>`;
     else if (k === "_sit") v = `<span class="chip ${v === "Ejecutado" ? "si" : v.startsWith("Sin") ? "no" : ""}">${escapar(v)}</span>`;
     else if (k === "programacion") v = e.programacion.map((p) => `<span class="tag">${escapar(p)}</span>`).join("");
     else if (k === "_ventana") v = ventanaHtml(e);
@@ -1091,8 +1092,9 @@ function abrirFicha(e) {
       ${fila("Sector", e.sector)}${fila("Subsector", e.subsector)}
       ${fila("Informe de supervisión", e.informe)}${fila("Complejidad", e.complejidad)}${fila("Conflicto", e.conflicto)}
       <h3>Estado</h3>
-      ${fila("Estado INAF", e.estado_inaf)}${fila("Caja según INAF", NOMBRE_NODO[e.categoria_inaf])}
-      ${e.siged && e.siged.length ? fila("Caja con SIGED", NOMBRE_NODO[e.categoria_siged]) + e.siged.map((d, i) => fila(i ? "" : "Firmado en SIGED (no en INAF)", `${d.tipo} · ${d.numero} · ${fmt(d.fecha)} · ${d.firmante}`)).join("") : ""}
+      ${fila("Estado INAF", e.estado_inaf)}${e.sin_rd ? fila("Sin RD", SIN_RD_TXT) : ""}${fila("Caja según INAF", NOMBRE_NODO[e.categoria_inaf])}
+      ${e.firma_mov ? fila("Caja según INAF firmado", NOMBRE_NODO[e.categoria_firmado]) + e.firma_docs.map((d, i) => fila(i ? "" : FIRMA_TXT[e.firma_mov], docFirma(d))).join("") : ""}
+      ${(e.siged || []).map((d, i) => fila(i ? "" : "Firmado en SIGED, aún no registrado en INAF", `${d.tipo} · ${d.numero} · ${fmt(d.fecha)} · ${d.firmante}`)).join("")}
       ${fila("Nota SIGED", e.siged_nota)}${fila("RSD de inicio", e.rsd_inicio)}
       ${e.rsd_notificada || e.notificacion ? fila("Notificación del inicio", (fmt(e.notificacion) || "aún sin notificar") +
         (e.rsd_notificada && (e.rsd_notificada !== e.rsd_inicio || e.rsd_sentido && e.rsd_sentido !== "INICIO") ? ` (${e.rsd_notificada}${e.rsd_sentido ? " · " + e.rsd_sentido.toLowerCase() : ""})` : "")) : ""}
@@ -1158,10 +1160,10 @@ const FILTROS_LISTA = [
   { k: "sub", t: "Subdirección", sec: [{ val: (e) => e.subdireccion, orden: ["SFEM", "SFAP", "SFIS", "SIN SUBD."] }] },
   { k: "grupo", t: "Grupo", sec: [{ val: (e) => e.grupo, txt: (v) => GRUPO_TXT[v], orden: Object.keys(GRUPO_TXT) }] },
   { k: "adm", t: "Administrado", buscar: true, ancho: true, sec: [{ val: (e) => e.administrado || "(sin administrado)" }] },
-  // la misma caja de la columna: sigue el selector INAF / INAF + SIGED
+  // la misma caja de la columna: sigue el selector INAF / INAF firmado
   { k: "caja", t: "Caja del árbol", ancho: true, sec: [{ val: (e) => hojaDe(e) || "fuera", orden: [...HOJAS, "fuera"],
     txt: (v) => v === "fuera" ? "Fuera del árbol" : caminoDe(v).slice(-2).map((k) => NODOS[k].t).join(" › ") }] },
-  // tal como viene en el stock INAF (no cambia con el selector INAF + SIGED)
+  // tal como viene en el stock INAF (no cambia con el selector INAF / INAF firmado)
   { k: "estado", t: "Estado INAF", ancho: true, sec: [{ val: (e) => e.estado_inaf || "(sin estado)" }] },
   { k: "riesgo", t: "Riesgo", sec: [
     { t: "Fecha límite (semáforo)", val: riesgoDe, txt: riesgoTxt, orden: ["venc", "rojo", "ambar", "verde", "sin", "conc"] },
@@ -1351,18 +1353,22 @@ function escapar(v) {
 }
 
 // ------------------------------------------------------------ notas
+// DERIVADO A TFA y DEVUELTO POR EL TFA solo cuentan como concluidos si INAF DOCUMENTOS registra una RD del expediente
+const SIN_RD_TXT = "INAF no registra una RD de este expediente (puede ser una queja elevada al TFA): se cuenta como pendiente, en la etapa que le toca";
 function dibujarNotas() {
   const n = $("#notas");
+  const sinRd = ["408", "NUEVO", "867", "NUEVO867"].flatMap(universo).filter((e) => e.sin_rd);
   const alCorte = universo("AL_CORTE");
   const priorizados = universo("408").concat(universo("NUEVO"));
-  const conSiged = priorizados.filter((e) => e.siged && e.siged.length);
-  const sinSentido = priorizados.filter((e) => e.siged_nota);
+  const atras = priorizados.filter((e) => e.firma_mov === "atras"), adelante = priorizados.filter((e) => e.firma_mov === "adelante");
+  const sinRegistrar = priorizados.filter((e) => (e.siged && e.siged.length) || e.siged_nota);
   const fuentes = Object.entries(D.fuentes_programacion || {}).map(([mes, f]) =>
     `<li><b>${mes}:</b> ${Object.entries(f).map(([s, a]) => `${s}: ${escapar(a)}`).join(" · ") || "sin archivos"}</li>`).join("");
   n.innerHTML = `
     <h3>Cómo se arma</h3>
     <ul>
       <li><b>Estado:</b> columna "Estado" del stock INAF (${escapar(D.archivo_stock)}), agrupada según <code>config.json</code>.</li>
+      <li><b>Derivados al TFA o devueltos por el TFA, sin RD (${sinRd.length}):</b> esos estados de INAF solo cuentan como concluidos si INAF DOCUMENTOS registra una resolución directoral del expediente; si no (por ejemplo, una queja elevada al TFA en pleno trámite), el expediente sigue pendiente en la etapa que le toca. ${sinRd.length ? '<button class="btn chico" id="verSinRd">Ver</button>' : ""}</li>
       <li><b>Fecha de riesgo:</b> la más temprana entre prescripción y caducidad.</li>
       <li><b>Nuevos no previstos:</b> pendientes con fecha de riesgo entre ${fmt(D.corte_lista)} y ${fmt(D.riesgo_hasta)} que no están en los 408 y que no cumplían ese criterio en el primer stock del corte. Una vez detectado, un nuevo se sigue aunque luego se concluya. Historial: ${D.stocks_en_historial} stocks (uno por día).</li>
       ${D.corte_867 ? `<li><b>Nuevos no previstos del árbol de ${N2}:</b> pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} que no cumplían ese criterio en el stock del ${fmt(D.corte_867)}, con el que se armó la lista. No cuentan los de la lista (tampoco por su informe de supervisión, para las filas sin expediente) ni los que ya sigue el árbol de 408.</li>` : ""}
@@ -1370,9 +1376,16 @@ function dibujarNotas() {
       <li><b>PAS con nulidad:</b> rama propia porque la base no dice si la nulidad es de la responsabilidad (puede prescribir) o solo de la multa (ya no prescribe). Por eso se mantiene en el criterio de riesgo.</li>
     </ul>
     <h3>Programaciones leídas</h3><ul>${fuentes}</ul>
-    <h3>Estado con SIGED (${conSiged.length} avanzan, ${sinSentido.length} RSD sin sentido)</h3>
-    <p>Con «INAF + SIGED» el estado de INAF avanza con los documentos firmados en SIGED (estado A y firma de quien corresponde en el área: ${escapar(Object.entries(D.firmantes_siged || {}).map(([a, f]) => a + " " + f.join("/")).join(", ") || "según config.json")}) creados después de que el expediente entró a su caja actual. RSD firmada: pasa a iniciado o a no inicio según la programación; si no se sabe el sentido, no se mueve. IFI firmado: pasa a iniciado con IFI. RD firmada: pasa a concluido. La línea de tiempo usa solo INAF. Reportes SIGED al ${fmt(D.siged_corte)}.
-      <button class="btn" id="verSiged">Ver los que avanzan</button> <button class="btn" id="verSinSentido">Ver RSD sin sentido</button></p>
+    <h3>INAF firmado (${atras.length} retroceden, ${adelante.length} avanzan)</h3>
+    <p>«INAF» ubica cada expediente solo con lo que dice INAF. En «INAF firmado» manda la firma:</p>
+    <ul>
+      <li><b>Retrocede:</b> si el documento que sostiene la etapa de INAF no está firmado, vuelve a la anterior (RD sin firma: iniciado con IFI; IFI sin firma: iniciado; RSD sin firma: en análisis de inicio). Si hay varias RD, basta una firmada.</li>
+      <li><b>Avanza:</b> si INAF DOCUMENTOS ya registra el documento siguiente y está firmado, aunque el estado del stock no haya cambiado.</li>
+      <li><b>Firmado:</b> el mismo número de documento está en SIGED con estado A y la firma de quien corresponde en el área (${escapar(Object.entries(D.firmantes_siged || {}).map(([a, f]) => a + " " + f.join("/")).join(", ") || "según config.json")}, y los encargos de <code>config.json > encargados_firma</code>), o INAF registra su notificación. Lo emitido antes del ${fmt(D.corte_lista)} se da por firmado.</li>
+      <li><b>No figura en SIGED:</b> cuenta como sin firma; conviene revisarlo a mano. Los reportes de SIGED solo traen lo creado en el mes, así que un documento que se firme después del cierre de su mes seguirá sin firma hasta que INAF registre su notificación.</li>
+      <li>La línea de tiempo y la curva diaria usan solo INAF. Reportes SIGED al ${fmt(D.siged_corte)}.</li>
+    </ul>
+    <p><button class="btn" id="verAtras">Ver los que retroceden</button> <button class="btn" id="verAdelante">Ver los que avanzan</button> <button class="btn" id="verSinRegistrar">Firmados en SIGED sin registrar en INAF (${sinRegistrar.length})</button></p>
     <h3>Al corte, fuera de los 408 (${alCorte.length})</h3>
     <p>Cumplían el criterio en el primer stock del corte pero no están en la lista; no se cuentan como nuevos.
       <button class="btn" id="verAlCorte">Ver expedientes</button></p>
@@ -1380,16 +1393,19 @@ function dibujarNotas() {
     <h3>Avisos (${D.avisos.length})</h3>
     <ul>${D.avisos.map((a) => `<li>${escapar(a)}</li>`).join("") || "<li>Sin avisos.</li>"}</ul>`;
   $("#verAlCorte").addEventListener("click", () => abrirTabla("Al corte, fuera de los 408", alCorte));
+  if ($("#verSinRd")) $("#verSinRd").addEventListener("click", () => abrirTabla("En el TFA o devueltos por el TFA, sin RD (cuentan como pendientes)", sinRd));
   const n867 = notas867.listas;
   if (n867) {
-    $("#verSiged867").addEventListener("click", () => abrirTabla(N2 + " · avanzan con documentos firmados en SIGED", n867.conSiged));
-    $("#verSinSentido867").addEventListener("click", () => abrirTabla(N2 + " · RSD firmada en SIGED sin sentido confirmado", n867.sinSentido));
+    $("#verAtras867").addEventListener("click", () => abrirTabla(N2 + " · retroceden: falta la firma de lo registrado en INAF", n867.atras));
+    $("#verAdelante867").addEventListener("click", () => abrirTabla(N2 + " · avanzan: registrado en INAF y firmado", n867.adelante));
+    $("#verSinRegistrar867").addEventListener("click", () => abrirTabla(N2 + " · firmados en SIGED, aún no registrados en INAF", n867.sinRegistrar));
     $("#verSinExp867").addEventListener("click", () => abrirTabla(N2 + " · filas sin expediente", n867.sinExp));
     $("#verEn408").addEventListener("click", () => abrirTabla(N2 + " · también en los 408", n867.en408));
     $("#verAlCorte867").addEventListener("click", () => abrirTabla("Al corte, fuera de los " + N2, n867.alCorte));
   }
-  $("#verSiged").addEventListener("click", () => abrirTabla("Avanzan con documentos firmados en SIGED", conSiged));
-  $("#verSinSentido").addEventListener("click", () => abrirTabla("RSD firmada en SIGED sin sentido confirmado", sinSentido));
+  $("#verAtras").addEventListener("click", () => abrirTabla("Retroceden: falta la firma de lo registrado en INAF", atras));
+  $("#verAdelante").addEventListener("click", () => abrirTabla("Avanzan: registrado en INAF y firmado", adelante));
+  $("#verSinRegistrar").addEventListener("click", () => abrirTabla("Firmados en SIGED, aún no registrados en INAF", sinRegistrar));
 }
 
 // seccion de Notas sobre el arbol de la segunda lista; deja sus listas en notas867.listas para los botones
@@ -1398,7 +1414,8 @@ function notas867() {
   if (!D.expedientes_867 || !D.expedientes_867.length) return "";
   const l = universo("867"), nue = universo("NUEVO867"), alCorte = universo("AL_CORTE867"), todos = l.concat(nue);
   const L = notas867.listas = {
-    conSiged: todos.filter((e) => e.siged && e.siged.length), sinSentido: todos.filter((e) => e.siged_nota),
+    atras: todos.filter((e) => e.firma_mov === "atras"), adelante: todos.filter((e) => e.firma_mov === "adelante"),
+    sinRegistrar: todos.filter((e) => (e.siged && e.siged.length) || e.siged_nota),
     sinExp: l.filter((e) => e.expediente.startsWith("Sin expediente")), en408: l.filter((e) => e.en_408), alCorte,
   };
   const equipos = EQUIPOS.map(([c, t]) => `${l.filter((e) => e.equipo === c).length} del ${t}`).join(" y ");
@@ -1410,8 +1427,8 @@ function notas867() {
       ${(D.sacados_867 || []).length ? `<li><b>Sacados de la lista (${D.sacados_867.length}):</b> ${D.sacados_867.map((s) => escapar(`N.° ${s.num}, ${s.expediente ? s.expediente.replace("-OEFA/DFAI/PAS", "") : "informe " + s.informe}`)).join("; ")}. Siguen en el Excel de la base, pero no se cuentan ni vuelven como nuevos (config.json > excluir_867).</li>` : ""}
       <li><b>Filas sin expediente (${L.sinExp.length}):</b> se busca su informe de supervisión en el stock; si no está, cuentan con la etapa más reciente que trae la lista y no entran a la curva diaria. <button class="btn chico" id="verSinExp867">Ver</button></li>
       <li><b>Nuevos no previstos:</b> ${nue.length}${D.corte_867 ? `, pendientes con fecha de riesgo entre ${fmt(D.riesgo_867_desde)} y ${fmt(D.riesgo_867_hasta)} detectados después del stock del ${fmt(D.corte_867)}` : ""}.</li>
-      <li><b>Estado con SIGED:</b> ${L.conSiged.length} avanzan y ${L.sinSentido.length} tienen una RSD sin sentido confirmado (lista y nuevos, misma regla que en los 408).
-        <button class="btn chico" id="verSiged867">Ver los que avanzan</button> <button class="btn chico" id="verSinSentido867">Ver RSD sin sentido</button></li>
+      <li><b>INAF firmado:</b> ${L.atras.length} retroceden y ${L.adelante.length} avanzan (lista y nuevos, misma regla que en los 408).
+        <button class="btn chico" id="verAtras867">Ver los que retroceden</button> <button class="btn chico" id="verAdelante867">Ver los que avanzan</button> <button class="btn chico" id="verSinRegistrar867">Firmados en SIGED sin registrar en INAF (${L.sinRegistrar.length})</button></li>
       <li><b>Al corte, fuera de los ${N2} (${alCorte.length}):</b> cumplían el criterio en el stock del ${fmt(D.corte_867)} pero no están en la lista; no se cuentan como nuevos. <button class="btn chico" id="verAlCorte867">Ver expedientes</button></li>
     </ul>`;
 }
@@ -1479,12 +1496,14 @@ function dibujarRiesgo(R = RIESGO_408) {
 
   // lista de alerta
   const enPlazo = P.filter((e) => e.dias_limite !== null && e.dias_limite <= R.dias);
-  // con estado INAF, un documento ya firmado en SIGED es una accion en curso; con INAF + SIGED ya movio la caja
-  const sinAccion = (e) => !e.programado && !(MODO === "inaf" && e.siged && e.siged.length);
+  // un documento firmado que aun no mueve la caja es una accion en curso: el que INAF todavia no registra y,
+  // con el selector en INAF, tambien el registrado y firmado que el stock no refleja
+  const enMarcha = (e) => (e.siged && e.siged.length) || (MODO === "inaf" && e.firma_mov === "adelante");
+  const sinAccion = (e) => !e.programado && !enMarcha(e);
   alerta.filas = R.filtro === "sin" ? enPlazo.filter(sinAccion) : enPlazo;
   pintarTabla(alerta);
   rid(R, "rExpl").textContent = `Pendientes cuya fecha límite llega en los próximos ${R.dias} días (o ya pasó)` +
-    (R.filtro === "sin" ? `, sin el producto que les toca en la programación de ${D.mes_programacion}` + (MODO === "inaf" ? " y sin documento firmado en SIGED" : "") : "") +
+    (R.filtro === "sin" ? `, sin el producto que les toca en la programación de ${D.mes_programacion}` + " y sin documento firmado en SIGED" : "") +
     `. ${enPlazo.length} vencen en ese plazo; ${enPlazo.filter(sinAccion).length} no tienen nada en marcha.` +
     (sinFecha ? ` ${sinFecha === 1 ? "1 pendiente no tiene" : sinFecha + " pendientes no tienen"} fecha límite en INAF y no entra${sinFecha === 1 ? "" : "n"} en esta lista (ver la columna «Sin fecha» del calendario).` : "");
 
@@ -1911,12 +1930,12 @@ function rotular() {
 
 function pintarTodo() {
   rotular();
-  const movidos = D.expedientes.filter((e) => e.grupo !== "AL_CORTE" && e.siged && e.siged.length).length;
+  const mov = (m) => D.expedientes.filter((e) => e.grupo !== "AL_CORTE" && e.firma_mov === m).length;
   // punto verde si el stock es de hoy; ambar si es de otro dia
   const h = new Date(), hoy = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}-${String(h.getDate()).padStart(2, "0")}`;
   $("#dato").className = "datos-al " + (D.corte_stock.slice(0, 10) === hoy ? "fresco" : "viejo");
   $("#meta").textContent = `Datos al ${fmt(D.corte_stock).slice(0, 5)} ${D.corte_stock.slice(11, 16)}` +
-    (MODO === "siged" ? ` · con SIGED (${movidos} avanzan)` : "");
+    (MODO === "firmado" ? ` · firmado (408: ${mov("atras")} retroceden, ${mov("adelante")} avanzan)` : "");
   $("#dato").title = `Stock INAF al ${fmt(D.corte_stock)} ${D.corte_stock.slice(11, 16)} (${D.archivo_stock})\nProgramación ${D.mes_programacion}\n` +
     `SIGED al ${fmt(D.siged_corte)} ${(D.siged_corte || "").slice(11, 16)}\nRiesgo hasta ${fmt(D.riesgo_hasta)}`;
   $("#nAvisos").textContent = D.avisos.length ? D.avisos.length : "";
@@ -1957,7 +1976,7 @@ function dibujarKpis(A = ARBOL_408) {
   if (S.length > 1) {
     const u = S[S.length - 1], lim = diaDe(u.fecha) - 7 * DIA;
     const ant = [...S].reverse().find((f) => diaDe(f.fecha) <= lim) || S[0];
-    const vs = `desde el ${fmt(ant.fecha).slice(0, 5)}`;
+    const vs = `desde el ${fmt(ant.fecha).slice(0, 5)}${MODO === "firmado" ? " (según INAF)" : ""}`;
     cambio = (cats, subirEsBueno) => {
       const d = val(u, cats) - val(ant, cats);
       if (!d) return `<span class="d">sin cambio</span> ${vs}`;
@@ -1991,7 +2010,7 @@ function dibujarAdicionales() {
   dibujarArbol(ARBOL_AD);
 }
 
-// texto por equipo bajo el arbol de la segunda lista; sigue el filtro de subdireccion y el selector INAF / INAF + SIGED
+// texto por equipo bajo el arbol de la segunda lista; sigue el filtro de subdireccion y el selector INAF / INAF firmado
 const EQUIPOS = [["EQUIPO REGULAR", "equipo regular"], ["EQUIPO ADICIONAL", "equipo adicional"]];
 function dibujarResumen867() {
   const l = universo("867");
@@ -2002,7 +2021,7 @@ function dibujarResumen867() {
   });
   const sinEquipo = l.filter((e) => !EQUIPOS.some(([c]) => c === e.equipo)).length;
   $("#resumen867").innerHTML = parrafos.join("") +
-    `<div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "siged" ? ` + documentos firmados en SIGED al ${fmt(D.siged_corte)}` : ""})${SUB === "Todas" ? "" : `, solo ${SUB}`}. ` +
+    `<div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "firmado" ? `, solo lo firmado según SIGED al ${fmt(D.siged_corte)}` : ""})${SUB === "Todas" ? "" : `, solo ${SUB}`}. ` +
     `Iniciados = iniciados + iniciados con IFI + PAS con nulidad; concluidos = caja Concluidos (con RD, no inicio y otros). ` +
     `No incluye los nuevos no previstos, que no tienen equipo.${sinEquipo ? ` ${sinEquipo} de los ${N2} no tienen equipo en la lista.` : ""}</div>`;
 }
@@ -2017,7 +2036,7 @@ function dibujarResumen() {
   $("#resumen").innerHTML = `
     <p>A finales de agosto de 2026 se identificaron ${total} expedientes con riesgo de prescripción y caducidad. Son casos en los que, si no se actúa a tiempo, se pierde la posibilidad de sancionar. (DFAI)</p>
     <p>Por ello, desde setiembre de 2026 la DFAI atiende con prioridad estos expedientes en riesgo de prescripción. A la fecha, ya se evitó la prescripción de ${evitados} de ellos (${pct(evitados)}) con la emisión de la resolución subdirectoral que inicia el PAS. Además, ${concluidos} expedientes (${pct(concluidos)}) ya concluyeron su tramitación del procedimiento administrativo sancionador. Es decir, la atención prioritaria ya está dando resultados en la DFAI.</p>
-    <div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "siged" ? ` + documentos firmados en SIGED al ${fmt(D.siged_corte)}` : ""}). Prescripción evitada = concluidos + iniciados + iniciados con IFI; concluidos = caja Concluidos.${SUB === "Todas" ? "" : ` Son cifras de toda la DFAI, no solo de ${SUB}.`}</div>`;
+    <div class="nota">Cifras al ${fmt(D.corte_stock)} (stock INAF${MODO === "firmado" ? `, solo lo firmado según SIGED al ${fmt(D.siged_corte)}` : ""}). Prescripción evitada = concluidos + iniciados + iniciados con IFI; concluidos = caja Concluidos.${SUB === "Todas" ? "" : ` Son cifras de toda la DFAI, no solo de ${SUB}.`}</div>`;
 }
 
 async function copiarResumen(sel = "#resumen") {
@@ -2168,15 +2187,23 @@ function aplicarModo() {
       e.programado_inaf = e.programado;
       e.producto_esperado_inaf = e.producto_esperado;
     }
-    const s = MODO === "siged" && e.categoria_siged !== undefined;
-    e.categoria = s ? e.categoria_siged : e.categoria_inaf;
-    e.programado = s ? e.programado_siged : e.programado_inaf;
-    e.producto_esperado = s ? e.producto_esperado_siged : e.producto_esperado_inaf;
+    const s = MODO === "firmado" && e.categoria_firmado !== undefined;
+    e.categoria = s ? e.categoria_firmado : e.categoria_inaf;
+    e.programado = s ? e.programado_firmado : e.programado_inaf;
+    e.producto_esperado = s ? e.producto_esperado_firmado : e.producto_esperado_inaf;
   }
   calcularLimites();
 }
 
-const movidoPorSiged = (e) => MODO === "siged" && e.siged && e.siged.length > 0;
+const movidoPorFirma = (e) => MODO === "firmado" && !!e.firma_mov;
+const FIRMA_TXT = { atras: "Falta la firma", adelante: "Registrado en INAF y firmado" };
+const docFirma = (d) => `${d.tipo} · ${d.numero} · ${fmt(d.fecha)} · ${d.firma}${d.visto ? ` (reporte del ${fmt(d.visto)})` : ""}`;
+function chipFirma(e) {
+  const t = escapar(e.firma_docs.map(docFirma).join(" | ")), tipos = e.firma_docs.map((d) => d.tipo).join(" + ");
+  return e.firma_mov === "atras"
+    ? `<span class="chip firma-atras" title="${t}">${tipos} ${e.firma_docs.some((d) => d.no_figura) ? "no figura en SIGED" : "sin firma"}</span>`
+    : `<span class="chip siged" title="${t}">${tipos} firmado</span>`;
+}
 
 async function actualizar() {
   if (!esApp()) { aviso("Actualizar solo funciona dentro de la app (.exe) o con motor.exe", 4000); return; }
@@ -2201,8 +2228,8 @@ const EXPORT_COLS = [
   ["Expediente", "expediente"], ["Grupo", "grupo"], ["ID 408", "id408"], ["N.° 872", "id867"], ["Equipo", "equipo"], ["Subdirección", "subdireccion"],
   ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
   ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
-  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
-  ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
+  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF firmado)", "categoria_firmado"],
+  ["Cambio por firma", "firma_mov"], ["Documentos (firma)", "firma_docs"], ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
   ["Notificación del inicio", "notificacion"], ["IFI desde", "ifi_desde"],
   ["Prescripción", "prescripcion"], ["Caducidad", "caducidad"], ["Fecha de riesgo", "riesgo"], ["Tipo de riesgo", "tipo_riesgo"],
   ["Días al riesgo", "dias_riesgo"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"],
@@ -2214,8 +2241,8 @@ const EXPORT_COLS_867 = [
   ["N.° 872", "id867"], ["Grupo", "grupo"], ["Equipo", "equipo"], ["Expediente", "expediente"], ["También en los 408", "en_408"], ["Subdirección", "subdireccion"],
   ["Sector", "sector"], ["Subsector", "subsector"], ["Administrado", "administrado"], ["Unidad fiscalizable", "uf"],
   ["Informe", "informe"], ["Jefe de equipo", "jefe"], ["Analista", "analista"], ["Complejidad", "complejidad"],
-  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF + SIGED)", "categoria_siged"],
-  ["Caja del árbol", "_caja"], ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
+  ["Conflicto", "conflicto"], ["Estado INAF", "estado_inaf"], ["Caja (INAF)", "categoria_inaf"], ["Caja (INAF firmado)", "categoria_firmado"],
+  ["Caja del árbol", "_caja"], ["Cambio por firma", "firma_mov"], ["Documentos (firma)", "firma_docs"], ["Firmado en SIGED (no en INAF)", "siged"], ["Nota SIGED", "siged_nota"], ["RSD de inicio", "rsd_inicio"],
   ["Notificación del inicio", "notificacion"], ["IFI desde", "ifi_desde"],
   ["Prescripción", "prescripcion"], ["Caducidad", "caducidad"], ["Fecha de riesgo", "riesgo"], ["Tipo de riesgo", "tipo_riesgo"],
   ["Días al riesgo", "dias_riesgo"], ["Producto esperado", "producto_esperado"], ["Programado", "programado"],
@@ -2247,7 +2274,9 @@ async function exportar(filas, nombre, otras = [], hoja = "Expedientes", cols = 
 function datosExport(filas, cols) {
   return filas.map((e) => cols.map(([, k]) => {
     let v = e[k];
-    if (k === "categoria_inaf" || k === "categoria_siged") v = NOMBRE_NODO[v] || v;
+    if (k === "categoria_inaf" || k === "categoria_firmado") v = NOMBRE_NODO[v] || v;
+    if (k === "firma_mov") v = { atras: "RETROCEDE", adelante: "AVANZA" }[v] || "";
+    if (k === "firma_docs") v = (v || []).map(docFirma).join(" | ");
     if (k === "siged") v = (v || []).map((d) => `${d.tipo} ${d.numero} (${fmt(d.fecha)})`).join(" | ");
     if (k === "programado") v = e.producto_esperado ? (v ? "SÍ" : "NO") : "";
     if (k === "programacion") v = v.join(" | ");
@@ -2290,7 +2319,7 @@ async function guardarImagen(id, nombre) {
 // ------------------------------------------------------------ subir al Drive
 // Tres pestanas: el arbol de 408 y el de la segunda lista como cuadros (caja, total, % y por subdireccion) y el
 // listado de Expedientes. Siempre de toda la DFAI y sin los filtros de la pestana Expedientes; el
-// estado sigue el selector INAF / INAF + SIGED.
+// estado sigue el selector INAF / INAF firmado.
 const deGrupo = (g) => (["867", "NUEVO867", "AL_CORTE867"].includes(g) ? D.expedientes_867 || [] : D.expedientes).filter((e) => e.grupo === g);
 const SUBS_DRIVE = ["SFEM", "SFAP", "SFIS"];
 const EXPORT_COLS_DRIVE = [...EXPORT_COLS, ["Caja del árbol", "_caja"]];
@@ -2304,7 +2333,7 @@ function cuadroArbol(A, titulo) {
   const dos = (n) => String(n).padStart(2, "0");
   filas.push([titulo]);
   est(0, 0, 1, { negrita: true, tam: 14 });
-  filas.push([`Datos al ${fmt(D.corte_stock)} ${D.corte_stock.slice(11, 16)} · ${MODO === "siged" ? "estado INAF + documentos firmados en SIGED" : "estado INAF"} · ` +
+  filas.push([`Datos al ${fmt(D.corte_stock)} ${D.corte_stock.slice(11, 16)} · ${MODO === "firmado" ? "estado INAF firmado (según SIGED)" : "estado INAF"} · ` +
     `programación ${D.mes_programacion} · subido el ${dos(ahora.getDate())}/${dos(ahora.getMonth() + 1)}/${ahora.getFullYear()} ${dos(ahora.getHours())}:${dos(ahora.getMinutes())}`]);
   est(1, 0, 1, { color: "#71717a" });
   filas.push([]);
